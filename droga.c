@@ -2,6 +2,7 @@
 
 void dijkstra(int);
 void drukuj_wyniki(int*, int*);
+int min(int*, int, int*);
 
 int Q[][16] =
 {
