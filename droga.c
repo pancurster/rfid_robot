@@ -13,6 +13,7 @@
 
 #define LICZBA_WEZLOW 16
 #define MAX_SASIADOW_PROSTOKAT 4
+#define L_KOLUMN 4
 #define NO_DEF 777
 #define INF 666
 
@@ -32,6 +33,11 @@ int Q_T[][LICZBA_WEZLOW] =
     {8,9,INF,INF}, {9,10,INF,INF}, {10,11,INF,INF}, {11,INF,INF,INF}
 };
 
+/* Kierunki */
+#define N 1
+#define E 2
+#define S 4
+#define W 7
 
 /*********** HARDWARE *************/
 
@@ -53,8 +59,9 @@ int STARTSTOP = 0;
 void dijkstra(int, int[][LICZBA_WEZLOW]);
 void drukuj_wyniki(int*, int*);
 int min(int*, int, int*);
-
-
+int kierunek(int, int);
+void decyzja(int, int, int);
+void skrecajLewo();
 
 #ifdef PC_DEBUG
 int main(int argc, char* argv[])
@@ -66,6 +73,77 @@ int main(int argc, char* argv[])
     return 0;
 }
 #endif
+
+/* Okresla kierunek na podstawie punktu poczatkowego
+ * i punktu nastepnego */
+int kierunek(int ap, int np)
+{
+    int k = np - ap;
+
+    switch(k){
+        //roznica miedzy wezlami -4 wiec kierunek N
+        case (-L_KOLUMN):
+            return N;
+        //riznica miedy wezlami 1 wiec kierunek E itd.
+        case (1):
+            return E;
+        case (L_KOLUMN):
+            return S;
+        case (-1):
+            return W;
+        default:
+            return -1;
+    }
+}
+
+void decyzja(int p, int a, int n)
+{
+    int orientacja = kierunek(p, a);
+    int nastepny_kierunek = kierunek(a, n);
+
+    if( orientacja == nastepny_kierunek ){
+        return;
+    }
+    else if( orientacja == N ){
+        if( nastepny_kierunek == W ){
+            //skrecajLewo();
+        }
+        else if( nastepny_kierunek == E ){
+            //skrecajPrawo();
+        }
+    }
+    else if( orientacja == E ){
+        if( nastepny_kierunek == N ){
+            //skrecajLewo();
+        }
+        else if( nastepny_kierunek == S ){
+            //skrecajPrawo();
+        }
+    }
+    else if( orientacja == S ){
+        if( nastepny_kierunek == W ){
+            //skrecajLewo();
+        }
+        else if( nastepny_kierunek == E ){
+            //skrecajPrawo();
+        }
+    }
+    else if( orientacja == W ){
+        if( nastepny_kierunek == S ){
+            //skrecajLewo();
+        }
+        else if( nastepny_kierunek == N ){
+            //skrecajPrawo();
+        }
+    }
+    /*
+    else{
+        return -1; //ERROR
+    } */
+
+    return;
+
+}
 
 int min(int* tab, int size, int* inS)
 {
@@ -245,5 +323,8 @@ void loop(){
 /* TODO:
  * * Ciagle po wlaczenie i wylaczeniu karta, jedno z kol 
  * * wchodzi w tryb skrecania.
+ *
+ * * funkcja decyzja wyglada kiepsko, jakis wzor na to 
+ * * znajdz :)
  */
 
