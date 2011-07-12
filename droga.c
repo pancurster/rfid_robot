@@ -1,17 +1,20 @@
+/*
+ * Lukasz Panek
+ * Sterowanie robotem RFID
+ */
+
+#define PC_DEBUG
+
+#ifdef PC_DEBUG
 #include <stdio.h>
+#endif
+
+/****** DIJKSTRA ***************/
 
 #define LICZBA_WEZLOW 16
-//maksymalna liczba sasiadow dla siatki prostokatnej
 #define MAX_SASIADOW_PROSTOKAT 4
-//maksymalna l. sasiadow dla siatki trojkatnej
-//#define MAX_SASIADOW_TROJKAT 8
-
 #define NO_DEF 777
 #define INF 666
-
-void dijkstra(int, int[][LICZBA_WEZLOW]); //czy mozna uzyc int** ?
-void drukuj_wyniki(int*, int*);
-int min(int*, int, int*);
 
 int Q_P[][LICZBA_WEZLOW] =
 {
@@ -29,7 +32,31 @@ int Q_T[][LICZBA_WEZLOW] =
     {8,9,INF,INF}, {9,10,INF,INF}, {10,11,INF,INF}, {11,INF,INF,INF}
 };
 
-/* --------------------------------- */
+
+/*********** HARDWARE *************/
+
+const uint8_t SILNIK_LEWY = 2;
+const uint8_t SILNIK_PRAWY = 3;
+const uint8_t SILNIKI_AKTYWNE = 4;
+
+#define START HIGH
+#define STOP LOW
+#define SILNIKI_LEWY_PRAWY 23
+#define CZAS_SKRETU_90_STOPNI 2000
+
+volatile int DATA = 0;
+int STARTSTOP = 0;
+
+/***** KONIEC DEKLARACJI **********/
+
+
+void dijkstra(int, int[][LICZBA_WEZLOW]);
+void drukuj_wyniki(int*, int*);
+int min(int*, int, int*);
+
+
+
+#ifdef PC_DEBUG
 int main(int argc, char* argv[])
 {
     if(argc > 1)
@@ -38,6 +65,7 @@ int main(int argc, char* argv[])
         dijkstra(0, Q_P);
     return 0;
 }
+#endif
 
 int min(int* tab, int size, int* inS)
 {
@@ -88,9 +116,12 @@ void dijkstra(int cel, int Q[][LICZBA_WEZLOW]){
         }
 
     }
-   drukuj_wyniki(d,p); 
+#ifdef PC_DEBUG
+    drukuj_wyniki(d,p);
+#endif
 }
 
+#ifdef PC_DEBUG
 void drukuj_wyniki(int* d, int* p){
     int x = 0;
     for(x=0; x < LICZBA_WEZLOW; x++){
@@ -108,3 +139,111 @@ void drukuj_wyniki(int* d, int* p){
         printf("%i ", p[x]);
     }
 }
+#endif
+
+/*
+ * Kod dotyczacy arduino dolaczany tylko w wersji finalnej
+ * lub w kompilacji w srodowisku arduino
+ */
+#ifndef PC_DEBUG
+
+void setup(){
+    //inicjalizacja komunikacji szerogowej z modulem RFID
+    Serial.begin(9600);
+
+    //okreslenie pinow sterujacych silnikami
+    pinMode(SILNIK_LEWY, OUTPUT);
+    pinMode(SILNIK_PRAWY, OUTPUT);
+    pinMode(SILNIKI_AKTYWNE, OUTPUT);
+
+    //Piny dipSwitcha sa wejsciami
+    pinMode(A2, INPUT);
+    pinMode(A3, INPUT);
+    pinMode(A4, INPUT);
+    pinMode(A5, INPUT);
+
+    digitalWrite(SILNIKI_AKTYWNE, LOW);
+
+}
+/*
+ * motor: SILNIK_LEWY, SILNIK_PRAWY, SILNIK_LEWY_PRAWY
+ * command: START, STOP
+ */
+void motorInterface(uint8_t motor, uint8_t command){
+    //wykonaj polecenia na obu silnikach
+    if(motor == SILNIKI_LEWY_PRAWY){
+        digitalWrite(SILNIK_LEWY, command);
+        digitalWrite(SILNIK_PRAWY, command);
+    }
+    //wykonaj polecenie na prawym lub lewym silniku
+    else{
+        digitalWrite(motor, command);
+    }
+}
+/*
+ * Obsluga sretu w lewo
+ */
+void skrecajLewo(){
+    motorInterface(SILNIK_LEWY, STOP);
+    delay(CZAS_SKRETU_90_STOPNI);
+    motorInterface(SILNIK_LEWY, START);
+}
+
+/*
+ * Obsluga skretu w prawo
+ */
+void skrecajPrawo(){
+    motorInterface(SILNIK_PRAWY, STOP);
+    delay(CZAS_SKRETU_90_STOPNI);
+    motorInterface(SILNIK_PRAWY, START);
+}
+
+//to narazie nie dziala, nie wiem dlaczego
+void start_stop(){
+    if(STARTSTOP == 0){
+        STARTSTOP = 1;
+        motorInterface(SILNIKI_LEWY_PRAWY, START);
+    }
+    else{
+        STARTSTOP = 0;
+        motorInterface(SILNIKI_LEWY_PRAWY, STOP);
+    }
+}
+
+void stop(){
+    if(STARTSTOP == 1){
+        digitalWrite(SILNIKI_AKTYWNE, LOW);
+        STARTSTOP = 0;
+    }
+    else{
+        digitalWrite(SILNIKI_AKTYWNE, HIGH);
+        /* HACK i inne cuda -------------------------
+        motorInterface(SILNIKI_LEWY_PRAWY, STOP);
+        delay(CZAS_SKRETU_90_STOPNI);
+        motorInterface(SILNIKI_LEWY_PRAWY, START);
+        * KONIEC HACKA -----------------------------*/
+        STARTSTOP = 1;
+    }
+}
+
+/*
+ * GLOWNA PETLA PROGRAMU
+ */
+void loop(){
+   if(Serial.available() > 0){
+       //funkcja sprawdzajaca dzialanie przypisane do karty
+       DATA = Serial.read();
+       if(DATA == 56) { skrecajPrawo(); }
+       if(DATA == 55) { skrecajLewo(); } 
+       if(DATA == 49) { stop(); }
+       Serial.flush();
+   } 
+}
+
+#endif
+
+/* TODO:
+ * * Ciagle po wlaczenie i wylaczeniu karta, jedno z kol 
+ * * wchodzi w tryb skrecania.
+ */
+
