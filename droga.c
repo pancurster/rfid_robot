@@ -52,16 +52,24 @@ const uint8_t SILNIKI_AKTYWNE = 4;
 
 volatile int DATA = 0;
 int STARTSTOP = 0;
+char METODA_STEROWANIA = 'N';
+int CEL = 0;
 
 /***** KONIEC DEKLARACJI **********/
 
 
 void dijkstra(int, int[][LICZBA_WEZLOW]);
 void drukuj_wyniki(int*, int*);
-int min(int*, int, int*);
+int minimum(int*, int, int*);
 int kierunek(int, int);
 void decyzja(int, int, int);
+
+void stop();
 void skrecajLewo();
+void skrecajPrawo();
+void motorInterface(uint8_t, uint8_t);
+void setup();
+void loop();
 
 #ifdef PC_DEBUG
 int main(int argc, char* argv[])
@@ -96,10 +104,10 @@ int kierunek(int ap, int np)
     }
 }
 
-void decyzja(int p, int a, int n)
+void decyzja(int pp, int ap, int np)
 {
-    int orientacja = kierunek(p, a);
-    int nastepny_kierunek = kierunek(a, n);
+    int orientacja = kierunek(pp, ap);
+    int nastepny_kierunek = kierunek(ap, np);
 
     if( orientacja == nastepny_kierunek ){
         return;
@@ -136,22 +144,17 @@ void decyzja(int p, int a, int n)
             //skrecajPrawo();
         }
     }
-    /*
-    else{
-        return -1; //ERROR
-    } */
 
     return;
-
 }
 
-int min(int* tab, int size, int* inS)
+int minimum(int* tab, int size, int* inS)
 {
     int m = INF; 
     int m_index = INF;
 
     int i = 0;
-    for(i; i < size; i++){
+    for(; i < size; i++){
         //warunek: jest mniejsze od aktualnego m i nie znajduje sie w przerobionych wezlach
         if( (tab[i] < m) && (inS[i] != 1) ){
             m = tab[i];
@@ -178,7 +181,7 @@ void dijkstra(int cel, int Q[][LICZBA_WEZLOW]){
     int h = 0; //pomocnicza
     int v; //aktualnie badany wezel
     for(i = 0; i < LICZBA_WEZLOW; i++){
-        v = min(d, LICZBA_WEZLOW, inS); //index najmniejszego wezla
+        v = minimum(d, LICZBA_WEZLOW, inS); //index najmniejszego wezla
         /* przsuwamy wezel do zbioru S */
         inS[v] = 1;
 
@@ -226,22 +229,52 @@ void drukuj_wyniki(int* d, int* p){
 #ifndef PC_DEBUG
 
 void setup(){
-    //inicjalizacja komunikacji szerogowej z modulem RFID
+    /* inicjalizacja komunikacji szerogowej z modulem RFID */
     Serial.begin(9600);
 
-    //okreslenie pinow sterujacych silnikami
+    /* okreslenie pinow sterujacych silnikami */
     pinMode(SILNIK_LEWY, OUTPUT);
     pinMode(SILNIK_PRAWY, OUTPUT);
     pinMode(SILNIKI_AKTYWNE, OUTPUT);
 
-    //Piny dipSwitcha sa wejsciami
+    /* Piny dipSwitcha sa wejsciami */
     pinMode(A2, INPUT);
     pinMode(A3, INPUT);
     pinMode(A4, INPUT);
     pinMode(A5, INPUT);
 
-    digitalWrite(SILNIKI_AKTYWNE, LOW);
+    /* Odczyt rodzaju siatki/sterowania, lub celu */
+    if( digitalRead(A2) ){
+        METODA_STEROWANIA = 'P';
+    }
+    else if( digitalRead(A3) ){
+        METODA_STEROWANIA = 'T';
+    }
+    else if( digitalRead(A4) ){
+        METODA_STEROWANIA = 'N';
+    }
+    else if( digitalRead(A5) ){
+        // ODCZYTAJ KARTE CELU
+    }
+    else{
+        METODA_STEROWANIA = 'N';
+    }
 
+    /* Generowanie tablicy kolejnych wezlow prowadzacych do celu,
+     * lub w przypadku sterowania nadarznego: brak akcji */
+    if( METODA_STEROWANIA == 'P'){
+        dijkstra(CEL, Q_P);
+    }
+    else if( METODA_STEROWANIA == 'T'){
+        dijkstra(CEL, Q_T);
+    }
+    else if( METODA_STEROWANIA == 'N'){
+        break;
+    }
+
+    /* Po starcie pojazd nie porusza sie */
+    digitalWrite(SILNIKI_AKTYWNE, LOW);
+    
 }
 /*
  * motor: SILNIK_LEWY, SILNIK_PRAWY, SILNIK_LEWY_PRAWY
@@ -276,18 +309,6 @@ void skrecajPrawo(){
     motorInterface(SILNIK_PRAWY, START);
 }
 
-//to narazie nie dziala, nie wiem dlaczego
-void start_stop(){
-    if(STARTSTOP == 0){
-        STARTSTOP = 1;
-        motorInterface(SILNIKI_LEWY_PRAWY, START);
-    }
-    else{
-        STARTSTOP = 0;
-        motorInterface(SILNIKI_LEWY_PRAWY, STOP);
-    }
-}
-
 void stop(){
     if(STARTSTOP == 1){
         digitalWrite(SILNIKI_AKTYWNE, LOW);
@@ -316,6 +337,7 @@ void loop(){
        if(DATA == 49) { stop(); }
        Serial.flush();
    } 
+
 }
 
 #endif
