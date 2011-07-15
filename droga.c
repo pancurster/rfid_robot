@@ -8,7 +8,7 @@
 #ifdef PC_DEBUG
 #include <stdio.h>
 #endif
-
+#include "test.h"
 /****** DIJKSTRA ***************/
 
 #define LICZBA_WEZLOW 16
@@ -16,7 +16,7 @@
 #define L_KOLUMN 4
 #define NO_DEF 777
 #define INF 666
-
+extern serial Serial;
 /* Globalna tablica poprzednikow wyliczana w algorytmie dijkstry.
  * Wedlug niej laczymy wezly tworzac scierzke do wezla 'cel'*/
 int P[LICZBA_WEZLOW] = {0};
@@ -67,7 +67,7 @@ const uint8_t SILNIKI_AKTYWNE = 4;
 
 volatile int DATA = 0;
 int STARTSTOP = 0;
-
+int CEL = 0;
 /* Przykladowe nr kart, posortowane! */
 int ID_KART[LICZBA_WEZLOW] = 
 { 
@@ -83,13 +83,14 @@ void dijkstra(int, int[][LICZBA_WEZLOW]);
 void drukuj_wyniki(int*, int*);
 int minimum(int*, int, int*);
 int kierunek(int, int);
-void decyzja(int, int, int);
+void kieruj(int, int, int);
 int znajdz_nr_wezla(int, int, int);
 int numer_wezla(int);
 
-void stop();
-void skrecajLewo();
-void skrecajPrawo();
+int polecenie(int);
+void stop(void);
+void skrecajLewo(void);
+void skrecajPrawo(void);
 void motorInterface(uint8_t, uint8_t);
 void setup();
 void loop();
@@ -99,12 +100,15 @@ int main(int argc, char* argv[])
 {
     /*
     if(argc > 1)
-        dijkstra(atoi(argv[1]), Q_T);
+        dijkstra(atoi(argv[1]), Q_P);
     else
-        dijkstra(0, Q_P);
-        */
-    printf("Index tej kartu to: %i\n", znajdz_wezel(atoi(argv[1]),0,15));
-    return 0;
+        dijkstra(0, Q_T);
+
+    printf("\nIndex tej kartu to: %i\n", numer_wezla(atoi(argv[2])));
+    return 0; */
+    dijkstra(0, Q_P);
+    setup();
+    loop();
 }
 #endif
 
@@ -155,7 +159,7 @@ int kierunek(int ap, int np)
     }
 }
 
-void decyzja(int pp, int ap, int np)
+void kieruj(int pp, int ap, int np)
 {
     int orientacja = kierunek(pp, ap);
     int nastepny_kierunek = kierunek(ap, np);
@@ -165,34 +169,34 @@ void decyzja(int pp, int ap, int np)
     }
     else if( orientacja == N ){
         if( nastepny_kierunek == W ){
-            //skrecajLewo();
+            skrecajLewo();
         }
         else if( nastepny_kierunek == E ){
-            //skrecajPrawo();
+            skrecajPrawo();
         }
     }
     else if( orientacja == E ){
         if( nastepny_kierunek == N ){
-            //skrecajLewo();
+            skrecajLewo();
         }
         else if( nastepny_kierunek == S ){
-            //skrecajPrawo();
+            skrecajPrawo();
         }
     }
     else if( orientacja == S ){
         if( nastepny_kierunek == W ){
-            //skrecajLewo();
+            skrecajLewo();
         }
         else if( nastepny_kierunek == E ){
-            //skrecajPrawo();
+            skrecajPrawo();
         }
     }
     else if( orientacja == W ){
         if( nastepny_kierunek == S ){
-            //skrecajLewo();
+            skrecajLewo();
         }
         else if( nastepny_kierunek == N ){
-            //skrecajPrawo();
+            skrecajPrawo();
         }
     }
 
@@ -208,7 +212,7 @@ int minimum(int* tab, int size, int* inS)
     for(; i < size; i++){
         //warunek: jest mniejsze od aktualnego m i nie znajduje sie w przerobionych wezlach
         if( (tab[i] < m) && (inS[i] != 1) ){
-            m = tab[i];
+            m       = tab[i];
             m_index = i;
         }
     }
@@ -220,7 +224,7 @@ void dijkstra(int cel, int Q[][LICZBA_WEZLOW]){
     int inS[LICZBA_WEZLOW] = {0}; //tablica informujaca o obecnosci w zbiorze Q
 
     int i,j = 0;
-    //na wszelki wypadek inicializujemy d niezdefiniowana odlegloscia
+    //na wszelki wypadek inicializujemy d niezdefiniowana odlegloscia (nie NULL!)
     for(i=0; i < LICZBA_WEZLOW; i++){
         d[i] = NO_DEF;
     }
@@ -276,7 +280,7 @@ void drukuj_wyniki(int* d, int* p){
  * Kod dotyczacy arduino dolaczany tylko w wersji finalnej
  * lub w kompilacji w srodowisku arduino
  */
-#ifndef PC_DEBUG
+//#ifndef PC_DEBUG
 
 /*
  * motor: SILNIK_LEWY, SILNIK_PRAWY, SILNIK_LEWY_PRAWY
@@ -296,7 +300,7 @@ void motorInterface(uint8_t motor, uint8_t command){
 /*
  * Obsluga sretu w lewo
  */
-void skrecajLewo(){
+void skrecajLewo(void){
     motorInterface(SILNIK_LEWY, STOP);
     delay(CZAS_SKRETU_90_STOPNI);
     motorInterface(SILNIK_LEWY, START);
@@ -305,13 +309,13 @@ void skrecajLewo(){
 /*
  * Obsluga skretu w prawo
  */
-void skrecajPrawo(){
+void skrecajPrawo(void){
     motorInterface(SILNIK_PRAWY, STOP);
     delay(CZAS_SKRETU_90_STOPNI);
     motorInterface(SILNIK_PRAWY, START);
 }
 
-void stop(){
+void stop(void){
     if(STARTSTOP == 1){
         digitalWrite(SILNIKI_AKTYWNE, LOW);
         STARTSTOP = 0;
@@ -328,13 +332,13 @@ void stop(){
 }
 
 /* TODO UWAGA: ta funkcje trzeba przetestwac pod katem 
- * narzutu czasowego */
+ * narzutu czasowego, moze powinna byc inline ?*/
 int odczytaj_karte(char probkuj)
 {
     volatile int data = 0;
-    char done = 0;
+    char done = CZYTAJ_DO_SKUTKU;
     if(probkuj)
-        done = 1;
+        done = PROBKUJ;
 
     do{
         if(Serial.available() > 0){
@@ -344,6 +348,15 @@ int odczytaj_karte(char probkuj)
             return data;
         }
     }while(!done);
+}
+
+/* Polecenia od kart RFID */
+#define ZATRZYMAJ 49
+#define JEDZ 50
+int polecenie(int id_karty){
+    if( id_karty == ZATRZYMAJ)       { stop(); }
+    else if( id_karty == JEDZ) { digitalWrite(SILNIKI_AKTYWNE, START);}
+    else return 0;
 }
 
 void setup(){
@@ -363,7 +376,6 @@ void setup(){
 
     /* Numer wezla 'celu'.
      * Jesli nie jest ustawiany to cel = wezel nr 0 */
-    int CEL = 0;
 
     char METODA_STEROWANIA = 'N';
 
@@ -400,8 +412,12 @@ void setup(){
     /* Inicjalizajcia struktury z informacja o
      * pozycjach robota */
     POZ.pp = -1;
-    if( POZ.ap = numer_wezla(odczytaj_karte(0)) == -1)
+    /*
+    if( POZ.ap = numer_wezla(odczytaj_karte(PROBKUJ)) == -1)
+        POZ.ap = -1;
         //TODO tutaj powinna byc obsluga bledu
+        */
+    POZ.ap = 15;
     POZ.np = P[POZ.ap];
 
 }
@@ -410,6 +426,7 @@ void setup(){
  * GLOWNA PETLA PROGRAMU
  */
 void loop(){
+    /*
    if(Serial.available() > 0){
        //funkcja sprawdzajaca dzialanie przypisane do karty
        DATA = Serial.read();
@@ -417,17 +434,38 @@ void loop(){
        if(DATA == 55) { skrecajLewo(); } 
        if(DATA == 49) { stop(); }
        Serial.flush();
+   }*/
+   //START
+   while(POZ.ap){
+       if(Serial.available() > 0){
+           DATA = Serial.read();
+           Serial.flush();
+           if( (numer_wezla(DATA)) == -1){
+               if(polecenie(DATA))
+                   error("Nierozpoznana karta");
+           } else {
+               POZ.pp = POZ.ap;
+               POZ.ap = numer_wezla(DATA);
+               POZ.np = P[POZ.ap];
+               printf("Jestem w punkcie %i, kieruje sie na punkt %i\n",
+                       POZ.ap, POZ.np);
+           }
+           if(POZ.ap == CEL)
+               digitalWrite(SILNIKI_AKTYWNE, STOP);
+           else
+               kieruj(POZ.pp, POZ.ap, POZ.np);
+       }
    }
 
 }
 
-#endif
+//#endif
 
 /* TODO:
  * * Ciagle po wlaczenie i wylaczeniu karta, jedno z kol 
  * * wchodzi w tryb skrecania.
  *
- * * funkcja decyzja wyglada kiepsko, jakis wzor na to 
+ * * funkcja kieruj wyglada kiepsko, jakis wzor na to 
  * * znajdz :)
  */
 
