@@ -3,12 +3,16 @@
  * Sterowanie robotem RFID
  */
 
-#define PC_DEBUG
+#define PC_COMPILATION
 
-#ifdef PC_DEBUG
+#ifdef PC_COMPILATION
 #include <stdio.h>
-#endif
 #include "test.h"
+#endif
+
+#ifndef PC_COMPILATION
+#include <WProgram.h>
+#endif
 /****** DIJKSTRA ***************/
 
 #define LICZBA_WEZLOW 16
@@ -16,12 +20,16 @@
 #define L_KOLUMN 4
 #define NO_DEF 777
 #define INF 666
+
+#ifdef PC_COMPILATION
 extern serial Serial;
+#endif
+
 /* Globalna tablica poprzednikow wyliczana w algorytmie dijkstry.
  * Wedlug niej laczymy wezly tworzac scierzke do wezla 'cel'*/
 int P[LICZBA_WEZLOW] = {0};
 
-int Q_P[][LICZBA_WEZLOW] =
+int Q_P[][L_KOLUMN] =
 {
     {1,4,INF,INF}, {0,2,5,INF}, {1,3,6,INF}, {2,7,INF,INF},
     {0,5,8,INF}, {1,6,9,4}, {2,7,10,5}, {3,11,6,INF},
@@ -29,7 +37,7 @@ int Q_P[][LICZBA_WEZLOW] =
     {8,13,INF,INF}, {9,14,12,INF}, {10,15,13,INF}, {11,14,INF,INF}
 };
 
-int Q_T[][LICZBA_WEZLOW] =
+int Q_T[][L_KOLUMN] =
 {
     {4,INF,INF,INF}, {4,5,INF,INF}, {5,6,INF,INF}, {6,7,INF,INF},
     {0,1,8,9}, {1,2,9,10}, {2,3,10,11}, {3,11,INF,INF},
@@ -79,23 +87,23 @@ int ID_KART[LICZBA_WEZLOW] =
 /***** KONIEC DEKLARACJI **********/
 
 
-void dijkstra(int, int[][LICZBA_WEZLOW]);
-void drukuj_wyniki(int*, int*);
-int minimum(int*, int, int*);
-int kierunek(int, int);
-void kieruj(int, int, int);
-int znajdz_nr_wezla(int, int, int);
-int numer_wezla(int);
+static void dijkstra(int, int[][L_KOLUMN]);
+static void drukuj_wyniki(int*, int*);
+static int minimum(int*, int, int*);
+static int kierunek(int, int);
+static void kieruj(int, int, int);
+static int znajdz_nr_wezla(int, int, int);
+static int numer_wezla(int);
 
-int polecenie(int);
-void stop(void);
-void skrecajLewo(void);
-void skrecajPrawo(void);
-void motorInterface(uint8_t, uint8_t);
+static int polecenie(int);
+static void stop(void);
+static void skrecajLewo(void);
+static void skrecajPrawo(void);
+static void motorInterface(uint8_t, uint8_t);
 void setup();
 void loop();
 
-#ifdef PC_DEBUG
+#ifdef PC_COMPILATION
 int main(int argc, char* argv[])
 {
     /*
@@ -106,7 +114,7 @@ int main(int argc, char* argv[])
 
     printf("\nIndex tej kartu to: %i\n", numer_wezla(atoi(argv[2])));
     return 0; */
-    dijkstra(0, Q_P);
+    digitalWrite(A3, HIGH);
     setup();
     loop();
 }
@@ -114,13 +122,13 @@ int main(int argc, char* argv[])
 
 /* uproszczenie wywolania fun. znajdz_nr_wezla.
  * Wyszukuje w fizycznych numerach kart RFID index danej karty */
-int numer_wezla(int id)
+static int numer_wezla(int id)
 {
     return znajdz_nr_wezla(id, 0, LICZBA_WEZLOW-1);
 }
 
 /* Przeszukiwanie binarne */
-int znajdz_nr_wezla(int id, int poczatek, int koniec)
+static int znajdz_nr_wezla(int id, int poczatek, int koniec)
 {
     if( poczatek > koniec )
         return -1;
@@ -139,7 +147,7 @@ int znajdz_nr_wezla(int id, int poczatek, int koniec)
 
 /* Okresla kierunek na podstawie punktu poczatkowego
  * i punktu nastepnego */
-int kierunek(int ap, int np)
+static int kierunek(int ap, int np)
 {
     int k = np - ap;
 
@@ -159,51 +167,38 @@ int kierunek(int ap, int np)
     }
 }
 
-void kieruj(int pp, int ap, int np)
+static void kieruj(int pp, int ap, int np)
 {
     int orientacja = kierunek(pp, ap);
     int nastepny_kierunek = kierunek(ap, np);
 
-    if( orientacja == nastepny_kierunek ){
+    if( orientacja == nastepny_kierunek
+            || orientacja == -1
+            || nastepny_kierunek == -1 )
+    {
         return;
     }
-    else if( orientacja == N ){
-        if( nastepny_kierunek == W ){
+
+    else if(  (orientacja == N) && (nastepny_kierunek == W) 
+            ||(orientacja == E) && (nastepny_kierunek == N)
+            ||(orientacja == S) && (nastepny_kierunek == W)
+            ||(orientacja == W) && (nastepny_kierunek == S) )
+    {
             skrecajLewo();
-        }
-        else if( nastepny_kierunek == E ){
-            skrecajPrawo();
-        }
     }
-    else if( orientacja == E ){
-        if( nastepny_kierunek == N ){
-            skrecajLewo();
-        }
-        else if( nastepny_kierunek == S ){
+
+    else if(  (orientacja == N) && (nastepny_kierunek == W)
+            ||(orientacja == E) && (nastepny_kierunek == S)
+            ||(orientacja == S) && (nastepny_kierunek == E)
+            ||(orientacja == W) && (nastepny_kierunek == N) )
+    {
             skrecajPrawo();
-        }
-    }
-    else if( orientacja == S ){
-        if( nastepny_kierunek == W ){
-            skrecajLewo();
-        }
-        else if( nastepny_kierunek == E ){
-            skrecajPrawo();
-        }
-    }
-    else if( orientacja == W ){
-        if( nastepny_kierunek == S ){
-            skrecajLewo();
-        }
-        else if( nastepny_kierunek == N ){
-            skrecajPrawo();
-        }
     }
 
     return;
 }
 
-int minimum(int* tab, int size, int* inS)
+static int minimum(int* tab, int size, int* inS)
 {
     int m = INF; 
     int m_index = INF;
@@ -214,12 +209,13 @@ int minimum(int* tab, int size, int* inS)
         if( (tab[i] < m) && (inS[i] != 1) ){
             m       = tab[i];
             m_index = i;
+            /* TODO: pierwszy znaleziony index moze zakonczyc przeszukiwanie ? */
         }
     }
     return m_index;
 }
 
-void dijkstra(int cel, int Q[][LICZBA_WEZLOW]){
+static void dijkstra(int cel, int Q[][L_KOLUMN]){
     int d[LICZBA_WEZLOW];
     int inS[LICZBA_WEZLOW] = {0}; //tablica informujaca o obecnosci w zbiorze Q
 
@@ -243,7 +239,7 @@ void dijkstra(int cel, int Q[][LICZBA_WEZLOW]){
         h = d[v] + 1;
         if(h > d[v]){ //wazny warunek
             for(j=0; j < MAX_SASIADOW_PROSTOKAT; j++){
-                if( (Q[v][j] != INF) && (inS[ Q[v][j] ] != 1) ){ // warunki: istnieje sasiad i nie nalezy do S
+                if( (Q[v][j] != INF) && (inS[ Q[v][j] ] != 1) ){ 
                     P[Q[v][j]] = v; //poprzenik
                     d[Q[v][j]] = h; //waga + waga poprzednika
                 }
@@ -251,13 +247,13 @@ void dijkstra(int cel, int Q[][LICZBA_WEZLOW]){
         }
 
     }
-#ifdef PC_DEBUG
+#ifdef PC_COMPILATION
     drukuj_wyniki(d,P);
 #endif
 }
 
-#ifdef PC_DEBUG
-void drukuj_wyniki(int* d, int* p){
+#ifdef PC_COMPILATION
+static void drukuj_wyniki(int* d, int* p){
     int x = 0;
     for(x=0; x < LICZBA_WEZLOW; x++){
         printf("%i ", x);
@@ -273,20 +269,13 @@ void drukuj_wyniki(int* d, int* p){
     for(x=0; x < LICZBA_WEZLOW; x++){
         printf("%i ", p[x]);
     }
+    printf("\n");
 }
 #endif
 
-/*
- * Kod dotyczacy arduino dolaczany tylko w wersji finalnej
- * lub w kompilacji w srodowisku arduino
- */
-//#ifndef PC_DEBUG
-
-/*
- * motor: SILNIK_LEWY, SILNIK_PRAWY, SILNIK_LEWY_PRAWY
- * command: START, STOP
- */
-void motorInterface(uint8_t motor, uint8_t command){
+/* motor: SILNIK_LEWY, SILNIK_PRAWY, SILNIK_LEWY_PRAWY
+ * command: START, STOP */
+static void motorInterface(uint8_t motor, uint8_t command){
     //wykonaj polecenia na obu silnikach
     if(motor == SILNIKI_LEWY_PRAWY){
         digitalWrite(SILNIK_LEWY, command);
@@ -297,25 +286,21 @@ void motorInterface(uint8_t motor, uint8_t command){
         digitalWrite(motor, command);
     }
 }
-/*
- * Obsluga sretu w lewo
- */
-void skrecajLewo(void){
+/* Obsluga sretu w lewo */
+static void skrecajLewo(void){
     motorInterface(SILNIK_LEWY, STOP);
     delay(CZAS_SKRETU_90_STOPNI);
     motorInterface(SILNIK_LEWY, START);
 }
 
-/*
- * Obsluga skretu w prawo
- */
-void skrecajPrawo(void){
+/* Obsluga skretu w prawo */
+static void skrecajPrawo(void){
     motorInterface(SILNIK_PRAWY, STOP);
     delay(CZAS_SKRETU_90_STOPNI);
     motorInterface(SILNIK_PRAWY, START);
 }
 
-void stop(void){
+static void stop(void){
     if(STARTSTOP == 1){
         digitalWrite(SILNIKI_AKTYWNE, LOW);
         STARTSTOP = 0;
@@ -333,7 +318,7 @@ void stop(void){
 
 /* TODO UWAGA: ta funkcje trzeba przetestwac pod katem 
  * narzutu czasowego, moze powinna byc inline ?*/
-int odczytaj_karte(char probkuj)
+static int odczytaj_karte(char probkuj)
 {
     volatile int data = 0;
     char done = CZYTAJ_DO_SKUTKU;
@@ -353,7 +338,7 @@ int odczytaj_karte(char probkuj)
 /* Polecenia od kart RFID */
 #define ZATRZYMAJ 49
 #define JEDZ 50
-int polecenie(int id_karty){
+static int polecenie(int id_karty){
     if( id_karty == ZATRZYMAJ)       { stop(); }
     else if( id_karty == JEDZ) { digitalWrite(SILNIKI_AKTYWNE, START);}
     else return 0;
@@ -422,9 +407,7 @@ void setup(){
 
 }
 
-/*
- * GLOWNA PETLA PROGRAMU
- */
+/* GLOWNA PETLA PROGRAMU */
 void loop(){
     /*
    if(Serial.available() > 0){
@@ -436,19 +419,26 @@ void loop(){
        Serial.flush();
    }*/
    //START
+   digitalWrite(SILNIKI_AKTYWNE, START);
    while(POZ.ap){
        if(Serial.available() > 0){
            DATA = Serial.read();
            Serial.flush();
            if( (numer_wezla(DATA)) == -1){
                if(polecenie(DATA))
+#ifdef PC_COMPILATION
                    error("Nierozpoznana karta");
+#else
+                   continue;
+#endif
            } else {
                POZ.pp = POZ.ap;
                POZ.ap = numer_wezla(DATA);
                POZ.np = P[POZ.ap];
+#ifdef PC_COMPILATION
                printf("Jestem w punkcie %i, kieruje sie na punkt %i\n",
                        POZ.ap, POZ.np);
+#endif
            }
            if(POZ.ap == CEL)
                digitalWrite(SILNIKI_AKTYWNE, STOP);
@@ -456,16 +446,13 @@ void loop(){
                kieruj(POZ.pp, POZ.ap, POZ.np);
        }
    }
-
 }
-
-//#endif
 
 /* TODO:
  * * Ciagle po wlaczenie i wylaczeniu karta, jedno z kol 
- * * wchodzi w tryb skrecania.
+ * * wchodzi w tryb skrecania. -moze cos z napieciami ?
+ * * moze trzeba stopowac i statrtowac pinem 4 ?
  *
- * * funkcja kieruj wyglada kiepsko, jakis wzor na to 
- * * znajdz :)
+ * * Zrobic porzadek z interfejsem silnikow
  */
 
