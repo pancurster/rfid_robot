@@ -4,6 +4,7 @@
  */
 
 #define PC_COMPILATION
+#define ARDUINO_DB
 
 #ifdef PC_COMPILATION
 #include <stdio.h>
@@ -79,10 +80,10 @@ int CEL = 0;
 /* Przykladowe nr kart, posortowane! */
 int ID_KART[LICZBA_WEZLOW] = 
 { 
-    15,16,23,25,
-    28,34,36,41,
-    42,47,49,58,
-    68,73,78,93
+    4850,4867,4967,5054,
+    5065,5070,5166,5255,
+    5269,5348,5349,5450,
+    5452,5555,5566,5648
 };
 /***** KONIEC DEKLARACJI **********/
 
@@ -114,9 +115,10 @@ int main(int argc, char* argv[])
 
     printf("\nIndex tej kartu to: %i\n", numer_wezla(atoi(argv[2])));
     return 0; */
-    digitalWrite(A3, HIGH);
+    digitalWrite(A2, HIGH);
     setup();
     loop();
+    return 0;
 }
 #endif
 
@@ -176,6 +178,9 @@ static void kieruj(int pp, int ap, int np)
             || orientacja == -1
             || nastepny_kierunek == -1 )
     {
+#ifdef ARDUINO_DB
+        Serial.print("kieruj:jazda prosto\n");
+#endif
         return;
     }
 
@@ -184,6 +189,9 @@ static void kieruj(int pp, int ap, int np)
             ||(orientacja == S) && (nastepny_kierunek == W)
             ||(orientacja == W) && (nastepny_kierunek == S) )
     {
+#ifdef ARDUINO_DB
+        Serial.print("kieruj:skrecam w lewo\n");
+#endif
             skrecajLewo();
     }
 
@@ -192,6 +200,9 @@ static void kieruj(int pp, int ap, int np)
             ||(orientacja == S) && (nastepny_kierunek == E)
             ||(orientacja == W) && (nastepny_kierunek == N) )
     {
+#ifdef ARDUINO_DB
+        Serial.print("kieruj:skrecam w prawo\n");
+#endif
             skrecajPrawo();
     }
 
@@ -216,6 +227,9 @@ static int minimum(int* tab, int size, int* inS)
 }
 
 static void dijkstra(int cel, int Q[][L_KOLUMN]){
+#ifdef ARDUINO_DB
+    Serial.print("Wywolanie: dijkstra(CEL, Q_?)\n");
+#endif
     int d[LICZBA_WEZLOW];
     int inS[LICZBA_WEZLOW] = {0}; //tablica informujaca o obecnosci w zbiorze Q
 
@@ -276,6 +290,13 @@ static void drukuj_wyniki(int* d, int* p){
 /* motor: SILNIK_LEWY, SILNIK_PRAWY, SILNIK_LEWY_PRAWY
  * command: START, STOP */
 static void motorInterface(uint8_t motor, uint8_t command){
+#ifdef ARDUINO_DB
+    Serial.print("motorInterface: motor=");
+    Serial.print(motor,DEC);
+    Serial.print(" command=");
+    Serial.print(command,DEC);
+    Serial.print("\n");
+#endif
     //wykonaj polecenia na obu silnikach
     if(motor == SILNIKI_LEWY_PRAWY){
         digitalWrite(SILNIK_LEWY, command);
@@ -288,6 +309,9 @@ static void motorInterface(uint8_t motor, uint8_t command){
 }
 /* Obsluga sretu w lewo */
 static void skrecajLewo(void){
+#ifdef ARDUINO_DB
+    Serial.print("Wywolanie: skrecajLewo()\n");
+#endif
     motorInterface(SILNIK_LEWY, STOP);
     delay(CZAS_SKRETU_90_STOPNI);
     motorInterface(SILNIK_LEWY, START);
@@ -295,6 +319,9 @@ static void skrecajLewo(void){
 
 /* Obsluga skretu w prawo */
 static void skrecajPrawo(void){
+#ifdef ARDUINO_DB
+    Serial.print("Wywolanie: skrecajPrawo()\n");
+#endif
     motorInterface(SILNIK_PRAWY, STOP);
     delay(CZAS_SKRETU_90_STOPNI);
     motorInterface(SILNIK_PRAWY, START);
@@ -328,6 +355,8 @@ static int odczytaj_karte(char probkuj)
     do{
         if(Serial.available() > 0){
             data = Serial.read();
+            data = data * 100;
+            data = data + Serial.read();
             Serial.flush();
             done = 1;
             return data;
@@ -362,7 +391,7 @@ void setup(){
     /* Numer wezla 'celu'.
      * Jesli nie jest ustawiany to cel = wezel nr 0 */
 
-    char METODA_STEROWANIA = 'N';
+    char METODA_STEROWANIA = 'P';
 
     /* Odczyt rodzaju siatki/sterowania, lub celu */
     if( digitalRead(A2) ){
@@ -379,16 +408,27 @@ void setup(){
     }
     else{
         /* w przypadku gdyby zaden przelacznik nie byl przelaczony */
-        METODA_STEROWANIA = 'N';
+        METODA_STEROWANIA = 'P';
     }
+#ifdef ARDUINO_DB
+    Serial.print("METODA_STEROWANIA=");
+    Serial.print(METODA_STEROWANIA, BYTE);
+    Serial.print("\n");
+#endif
 
     /* Generowanie tablicy kolejnych wezlow prowadzacych do celu,
      * lub w przypadku sterowania nadarznego: brak akcji */
     if( METODA_STEROWANIA == 'P'){
         dijkstra(CEL, Q_P);
+#ifdef ARDUINO_DB
+        Serial.print("Powrot z: dijkstra(CEL, Q_P)\n");
+#endif
     }
     else if( METODA_STEROWANIA == 'T'){
         dijkstra(CEL, Q_T);
+#ifdef ARDUINO_DB
+        Serial.print("Powrot z: dijkstra(CEL, Q_T)\n");
+#endif
     }
 
     /* Po starcie pojazd nie porusza sie */
@@ -396,12 +436,14 @@ void setup(){
 
     /* Inicjalizajcia struktury z informacja o
      * pozycjach robota */
+    /** TODO: to powinno wygladac tak:
+     ** Proba czytania karty az do skutku i wtedy
+     ** start i jazda do przodu oraz ustawienia np */
     POZ.pp = -1;
     /*
     if( POZ.ap = numer_wezla(odczytaj_karte(PROBKUJ)) == -1)
         POZ.ap = -1;
-        //TODO tutaj powinna byc obsluga bledu
-        */
+    */
     POZ.ap = 15;
     POZ.np = P[POZ.ap];
 
@@ -423,25 +465,39 @@ void loop(){
    while(POZ.ap){
        if(Serial.available() > 0){
            DATA = Serial.read();
+           DATA = DATA * 100;
+           DATA = DATA + Serial.read();
            Serial.flush();
+#ifdef ARDUINO_DB
+           Serial.print("Warunek serial.avail > 0\t");
+           Serial.print("DATA = ");
+           Serial.print(DATA, DEC);
+           Serial.print("\n");
+#endif
            if( (numer_wezla(DATA)) == -1){
                if(polecenie(DATA))
-#ifdef PC_COMPILATION
-                   error("Nierozpoznana karta");
-#else
-                   continue;
+#ifdef ARDUINO_DB
+                   Serial.print("Nierozpoznana karta\n");
 #endif
+                   continue;
            } else {
                POZ.pp = POZ.ap;
                POZ.ap = numer_wezla(DATA);
                POZ.np = P[POZ.ap];
-#ifdef PC_COMPILATION
-               printf("Jestem w punkcie %i, kieruje sie na punkt %i\n",
-                       POZ.ap, POZ.np);
+#ifdef ARDUINO_DB
+               Serial.print("Jestem w punkcie ");
+               Serial.print(POZ.ap, DEC);
+               Serial.print(", nastepnym punktem powinien byc wezel: ");
+               Serial.print(POZ.np, DEC);
+               Serial.print("\n");
 #endif
            }
-           if(POZ.ap == CEL)
+           if(POZ.ap == CEL){
+#ifdef ARDUINO_DB
+               Serial.print("Cel osiagniety!, silniki stop\n");
+#endif
                digitalWrite(SILNIKI_AKTYWNE, STOP);
+           }
            else
                kieruj(POZ.pp, POZ.ap, POZ.np);
        }
@@ -452,6 +508,8 @@ void loop(){
  * * Ciagle po wlaczenie i wylaczeniu karta, jedno z kol 
  * * wchodzi w tryb skrecania. -moze cos z napieciami ?
  * * moze trzeba stopowac i statrtowac pinem 4 ?
+ * * A moze syf w buforze uarta ? Serial.flush() przed czytaniem?->
+ * * raczej nie... wydaje sie ze karty sa czytane idealnie.
  *
  * * Zrobic porzadek z interfejsem silnikow
  */
