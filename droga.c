@@ -8,6 +8,7 @@
 
 #ifdef PC_COMPILATION
 #include <stdio.h>
+#include <string.h>
 #include "test.h"
 #endif
 
@@ -19,8 +20,8 @@
 #define LICZBA_WEZLOW 16
 #define MAX_SASIADOW_PROSTOKAT 4
 #define L_KOLUMN 4
-#define NO_DEF 777
-#define INF 666
+#define NO_DEF 249
+#define INF 244
 
 #ifdef PC_COMPILATION
 extern serial Serial;
@@ -53,10 +54,14 @@ struct wektor_ruchu{
 }POZ;
 
 /* Kierunki */
-#define N 1
-#define E 2
-#define S 4
-#define W 7
+#define N 0
+#define E 3
+#define S 6
+#define W 9
+#define NE 2
+#define NW 10
+#define SE 5
+#define SW 7
 
 /*********** HARDWARE *************/
     
@@ -74,9 +79,12 @@ const uint8_t SILNIKI_AKTYWNE = 4;
 #define SILNIKI_LEWY_PRAWY 23
 #define CZAS_SKRETU_90_STOPNI 2000
 
+/* STAN POJAZDU */
 volatile int DATA = 0;
 int STARTSTOP = 0;
 int CEL = 0;
+char METODA_STEROWANIA = 'P';
+
 /* Przykladowe nr kart, posortowane! */
 int ID_KART[LICZBA_WEZLOW] = 
 { 
@@ -107,15 +115,23 @@ void loop();
 #ifdef PC_COMPILATION
 int main(int argc, char* argv[])
 {
-    /*
-    if(argc > 1)
-        dijkstra(atoi(argv[1]), Q_P);
-    else
-        dijkstra(0, Q_T);
+    if(argc > 1){
+        if(!strcmp(argv[1],"P"))
+            digitalWrite(A2, HIGH);
+        else if(!strcmp(argv[1],"T"))
+            digitalWrite(A3, HIGH);
+        else if(!strcmp(argv[1],"N"))
+            digitalWrite(A4, HIGH);
+        else if(!strcmp(argv[1],"C"))
+            digitalWrite(A5, HIGH);
 
-    printf("\nIndex tej kartu to: %i\n", numer_wezla(atoi(argv[2])));
-    return 0; */
-    digitalWrite(A2, HIGH);
+        if(argc > 2 && !strcmp(argv[2],"dijkstra")){
+            setup();
+            return 0;
+        }    
+    }else{
+        digitalWrite(A2, HIGH);
+    }
     setup();
     loop();
     return 0;
@@ -152,20 +168,32 @@ static int znajdz_nr_wezla(int id, int poczatek, int koniec)
 static int kierunek(int ap, int np)
 {
     int k = np - ap;
-
-    switch(k){
-        //roznica miedzy wezlami -4 wiec kierunek N
-        case (-L_KOLUMN):
-            return N;
-        //riznica miedy wezlami 1 wiec kierunek E itd.
-        case (1):
-            return E;
-        case (L_KOLUMN):
-            return S;
-        case (-1):
-            return W;
-        default:
-            return -1;
+    if(METODA_STEROWANIA == 'P'){
+        switch(k){
+            //roznica miedzy wezlami -4 wiec kierunek N
+            case (-L_KOLUMN):
+                return N;
+            //riznica miedy wezlami 1 wiec kierunek E itd.
+            case (1):
+                return E;
+            case (L_KOLUMN):
+                return S;
+            case (-1):
+                return W;
+            default:
+                return -1;
+        }
+    }else if(METODA_STEROWANIA == 'T'){
+        switch(k){
+            case (-L_KOLUMN):
+                return NE;
+            case (L_KOLUMN):
+                return SE;
+            case (L_KOLUMN-1):
+                return SW;
+            case (-L_KOLUMN-1):
+                return NW;
+        }
     }
 }
 
@@ -186,8 +214,12 @@ static void kieruj(int pp, int ap, int np)
 
     else if(  (orientacja == N) && (nastepny_kierunek == W) 
             ||(orientacja == E) && (nastepny_kierunek == N)
-            ||(orientacja == S) && (nastepny_kierunek == W)
-            ||(orientacja == W) && (nastepny_kierunek == S) )
+            ||(orientacja == S) && (nastepny_kierunek == E)
+            ||(orientacja == W) && (nastepny_kierunek == S)
+            ||(orientacja ==NE) && (nastepny_kierunek ==NW)
+            ||(orientacja ==SE) && (nastepny_kierunek ==NE)
+            ||(orientacja ==SW) && (nastepny_kierunek ==SE)
+            ||(orientacja ==NW) && (nastepny_kierunek ==SW) )
     {
 #ifdef ARDUINO_DB
         Serial.print("kieruj:skrecam w lewo\n");
@@ -195,10 +227,14 @@ static void kieruj(int pp, int ap, int np)
             skrecajLewo();
     }
 
-    else if(  (orientacja == N) && (nastepny_kierunek == W)
+    else if(  (orientacja == N) && (nastepny_kierunek == E)
             ||(orientacja == E) && (nastepny_kierunek == S)
-            ||(orientacja == S) && (nastepny_kierunek == E)
-            ||(orientacja == W) && (nastepny_kierunek == N) )
+            ||(orientacja == S) && (nastepny_kierunek == W)
+            ||(orientacja == W) && (nastepny_kierunek == N) 
+            ||(orientacja ==NE) && (nastepny_kierunek ==SE)
+            ||(orientacja ==SE) && (nastepny_kierunek ==SW)
+            ||(orientacja ==SW) && (nastepny_kierunek ==NW)
+            ||(orientacja ==NW) && (nastepny_kierunek ==NE) )
     {
 #ifdef ARDUINO_DB
         Serial.print("kieruj:skrecam w prawo\n");
@@ -220,12 +256,14 @@ static int minimum(int* tab, int size, int* inS)
         if( (tab[i] < m) && (inS[i] != 1) ){
             m       = tab[i];
             m_index = i;
-            /* TODO: pierwszy znaleziony index moze zakonczyc przeszukiwanie ? */
         }
     }
     return m_index;
 }
 
+/* TODO: dla trojkata nie wybiera najkrotszych sciezek.
+ * To jest chyba problem z wagami ?
+ * Algorytm dziala jakby z punktu widzenia siatki prostokatnej */
 static void dijkstra(int cel, int Q[][L_KOLUMN]){
 #ifdef ARDUINO_DB
     Serial.print("Wywolanie: dijkstra(CEL, Q_?)\n");
@@ -269,17 +307,19 @@ static void dijkstra(int cel, int Q[][L_KOLUMN]){
 #ifdef PC_COMPILATION
 static void drukuj_wyniki(int* d, int* p){
     int x = 0;
+    printf("Q:");
     for(x=0; x < LICZBA_WEZLOW; x++){
         printf("%i ", x);
     }
     printf("\n");
-
+    
+    printf("d:");
     for(x=0; x < LICZBA_WEZLOW; x++){
         printf("%i ", d[x]);
     }
-    
     printf("\n");
 
+    printf("P:");
     for(x=0; x < LICZBA_WEZLOW; x++){
         printf("%i ", p[x]);
     }
@@ -388,10 +428,6 @@ void setup(){
     pinMode(A4, INPUT);
     pinMode(A5, INPUT);
 
-    /* Numer wezla 'celu'.
-     * Jesli nie jest ustawiany to cel = wezel nr 0 */
-
-    char METODA_STEROWANIA = 'P';
 
     /* Odczyt rodzaju siatki/sterowania, lub celu */
     if( digitalRead(A2) ){
