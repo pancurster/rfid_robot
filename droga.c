@@ -14,6 +14,7 @@
 
 #ifndef PC_COMPILATION
 #include <WProgram.h>
+#include <EEPROM.h>
 #endif
 /****** DIJKSTRA ***************/
 
@@ -31,6 +32,7 @@ extern serial Serial;
  * Wedlug niej laczymy wezly tworzac scierzke do wezla 'cel'*/
 int P[LICZBA_WEZLOW] = {0};
 
+/* Definicja sasiadow poszczegolnych wezlow dla siatki prostokatnej*/
 int Q_P[][L_KOLUMN] =
 {
     {1,4,INF,INF}, {0,2,5,INF}, {1,3,6,INF}, {2,7,INF,INF},
@@ -39,6 +41,7 @@ int Q_P[][L_KOLUMN] =
     {8,13,INF,INF}, {9,14,12,INF}, {10,15,13,INF}, {11,14,INF,INF}
 };
 
+/* Definicja sasiadow poszczegolnych wezlow dla siatki trojkatnej*/
 int Q_T[][L_KOLUMN] =
 {
     {4,INF,INF,INF}, {4,5,INF,INF}, {5,6,INF,INF}, {6,7,INF,INF},
@@ -47,6 +50,7 @@ int Q_T[][L_KOLUMN] =
     {8,9,INF,INF}, {9,10,INF,INF}, {10,11,INF,INF}, {11,INF,INF,INF}
 };
 
+/* Przechowywanie aktualnego wektora ruch pojazdu */
 struct wektor_ruchu{
     int pp;
     int ap;
@@ -64,26 +68,22 @@ struct wektor_ruchu{
 #define SW 7
 
 /*********** HARDWARE *************/
-    
-const uint8_t SILNIK_LEWY = 2;
-const uint8_t SILNIK_PRAWY = 3;
-const uint8_t SILNIKI_AKTYWNE = 4;
-
 /* Zwiazane z funkcja odczytaj_karte */
 #define CZYTAJ_DO_SKUTKU 0
 #define PROBKUJ 1
 
 /* SILNIKI */
-#define START HIGH
-#define STOP LOW
-#define SILNIKI_LEWY_PRAWY 23
 #define CZAS_SKRETU_90_STOPNI 2000
 
+#define SILNIK_LEWY 2
+#define SILNIK_PRAWY 3
+#define SILNIKI_AKTYWNE 4
+
 /* STAN POJAZDU */
-volatile int DATA = 0;
-int STARTSTOP = 0;
-int CEL = 0;
-char METODA_STEROWANIA = 'P';
+volatile int DATA = 0;          //odczytany baj nr karty
+int STARTSTOP = 0;              //info czy pojazd porusza sie
+int CEL = 0;                    //nr wezla do ktorego pojazd jedzie
+char METODA_STEROWANIA = 'P';   //info o typie siatki lub jej braku
 
 /* Przykladowe nr kart, posortowane! */
 int ID_KART[LICZBA_WEZLOW] = 
@@ -106,9 +106,9 @@ static int numer_wezla(int);
 
 static int polecenie(int);
 static void stop(void);
+static void start(void);
 static void skrecajLewo(void);
 static void skrecajPrawo(void);
-static void motorInterface(uint8_t, uint8_t);
 void setup();
 void loop();
 
@@ -197,6 +197,7 @@ static int kierunek(int ap, int np)
     }
 }
 
+/* Decyduje o wywalaniu skretu w ktoras ze stron lub jezdzie na wprost*/
 static void kieruj(int pp, int ap, int np)
 {
     int orientacja = kierunek(pp, ap);
@@ -245,7 +246,8 @@ static void kieruj(int pp, int ap, int np)
     return;
 }
 
-static int minimum(int* tab, int size, int* inS)
+/* Wyszukuje element o nakrotszej drodze do celu */
+static int minimum(int* d, int size, int* inS)
 {
     int m = INF; 
     int m_index = INF;
@@ -253,8 +255,8 @@ static int minimum(int* tab, int size, int* inS)
     int i = 0;
     for(; i < size; i++){
         //warunek: jest mniejsze od aktualnego m i nie znajduje sie w przerobionych wezlach
-        if( (tab[i] < m) && (inS[i] != 1) ){
-            m       = tab[i];
+        if( (d[i] < m) && (inS[i] != 1) ){
+            m       = d[i];
             m_index = i;
         }
     }
@@ -327,34 +329,14 @@ static void drukuj_wyniki(int* d, int* p){
 }
 #endif
 
-/* motor: SILNIK_LEWY, SILNIK_PRAWY, SILNIK_LEWY_PRAWY
- * command: START, STOP */
-static void motorInterface(uint8_t motor, uint8_t command){
-#ifdef ARDUINO_DB
-    Serial.print("motorInterface: motor=");
-    Serial.print(motor,DEC);
-    Serial.print(" command=");
-    Serial.print(command,DEC);
-    Serial.print("\n");
-#endif
-    //wykonaj polecenia na obu silnikach
-    if(motor == SILNIKI_LEWY_PRAWY){
-        digitalWrite(SILNIK_LEWY, command);
-        digitalWrite(SILNIK_PRAWY, command);
-    }
-    //wykonaj polecenie na prawym lub lewym silniku
-    else{
-        digitalWrite(motor, command);
-    }
-}
 /* Obsluga sretu w lewo */
 static void skrecajLewo(void){
 #ifdef ARDUINO_DB
     Serial.print("Wywolanie: skrecajLewo()\n");
 #endif
-    motorInterface(SILNIK_LEWY, STOP);
+    PORTD &= 0b11111011;
     delay(CZAS_SKRETU_90_STOPNI);
-    motorInterface(SILNIK_LEWY, START);
+    PORTD |= (1<<2);
 }
 
 /* Obsluga skretu w prawo */
@@ -362,29 +344,27 @@ static void skrecajPrawo(void){
 #ifdef ARDUINO_DB
     Serial.print("Wywolanie: skrecajPrawo()\n");
 #endif
-    motorInterface(SILNIK_PRAWY, STOP);
+    PORTD &= 0b11110111;
     delay(CZAS_SKRETU_90_STOPNI);
-    motorInterface(SILNIK_PRAWY, START);
+    PORTD |= (1<<3);
+    return;
 }
 
+/* Zatrzymanie pojazdu */
 static void stop(void){
-    if(STARTSTOP == 1){
-        digitalWrite(SILNIKI_AKTYWNE, LOW);
-        STARTSTOP = 0;
-    }
-    else{
-        digitalWrite(SILNIKI_AKTYWNE, HIGH);
-        /* HACK i inne cuda -------------------------
-        motorInterface(SILNIKI_LEWY_PRAWY, STOP);
-        delay(CZAS_SKRETU_90_STOPNI);
-        motorInterface(SILNIKI_LEWY_PRAWY, START);
-        * KONIEC HACKA -----------------------------*/
-        STARTSTOP = 1;
-    }
+    PORTD &= 0b11100011;
+    return;
+}
+
+/* Uruchomienie silniczkow pojazdu */
+static void start(void){
+    PORTD |= (1<<2)|(1<<3)|(1<<4);
+    return;
 }
 
 /* TODO UWAGA: ta funkcje trzeba przetestwac pod katem 
- * narzutu czasowego, moze powinna byc inline ?*/
+ * narzutu czasowego, moze powinna byc inline ?
+ * TODO: czy ta funkcja jest w ogóle potrzebna ?*/
 static int odczytaj_karte(char probkuj)
 {
     volatile int data = 0;
@@ -395,8 +375,10 @@ static int odczytaj_karte(char probkuj)
     do{
         if(Serial.available() > 0){
             data = Serial.read();
+            delay(10);
             data = data * 100;
             data = data + Serial.read();
+            delay(10);
             Serial.flush();
             done = 1;
             return data;
@@ -404,12 +386,13 @@ static int odczytaj_karte(char probkuj)
     }while(!done);
 }
 
-/* Polecenia od kart RFID */
+/* Polecenia od kart RFID 
+ * TODO prawdopodobnie nie bedzi to potrzebne */
 #define ZATRZYMAJ 49
 #define JEDZ 50
 static int polecenie(int id_karty){
-    if( id_karty == ZATRZYMAJ)       { stop(); }
-    else if( id_karty == JEDZ) { digitalWrite(SILNIKI_AKTYWNE, START);}
+    if( id_karty == ZATRZYMAJ) { stop(); }
+    else if( id_karty == JEDZ) { start();}
     else return 0;
 }
 
@@ -441,6 +424,8 @@ void setup(){
     }
     else if( digitalRead(A5) ){
         CEL = numer_wezla(odczytaj_karte(CZYTAJ_DO_SKUTKU));
+        EEPROM.write(1, CEL);
+        for(;;){}
     }
     else{
         /* w przypadku gdyby zaden przelacznik nie byl przelaczony */
@@ -468,7 +453,7 @@ void setup(){
     }
 
     /* Po starcie pojazd nie porusza sie */
-    digitalWrite(SILNIKI_AKTYWNE, LOW);
+    stop();
 
     /* Inicjalizajcia struktury z informacja o
      * pozycjach robota */
@@ -497,13 +482,18 @@ void loop(){
        Serial.flush();
    }*/
    //START
-   digitalWrite(SILNIKI_AKTYWNE, START);
+   if( POZ.ap != CEL)
+       start();
+
    while(POZ.ap){
        if(Serial.available() > 0){
            DATA = Serial.read();
+           delay(10);               //ze wzgledu na bledy w odczycie
            DATA = DATA * 100;
            DATA = DATA + Serial.read();
+           delay(10);               //lekkie opoznienia
            Serial.flush();
+
 #ifdef ARDUINO_DB
            Serial.print("Warunek serial.avail > 0\t");
            Serial.print("DATA = ");
@@ -532,7 +522,7 @@ void loop(){
 #ifdef ARDUINO_DB
                Serial.print("Cel osiagniety!, silniki stop\n");
 #endif
-               digitalWrite(SILNIKI_AKTYWNE, STOP);
+               stop();
            }
            else
                kieruj(POZ.pp, POZ.ap, POZ.np);
@@ -548,5 +538,8 @@ void loop(){
  * * raczej nie... wydaje sie ze karty sa czytane idealnie.
  *
  * * Zrobic porzadek z interfejsem silnikow
+ *
+ * * while(POZ.ap) ? a co jestli wezel '0' nie jest celem tylko
+ * * punktem przejazdowym ? Poprawic.
  */
 
