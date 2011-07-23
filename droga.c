@@ -23,9 +23,11 @@
 #define L_KOLUMN 4
 #define NO_DEF 249
 #define INF 244
+#define POZ_NIEZNANA (-1)
 
 #ifdef PC_COMPILATION
 extern serial Serial;
+extern char PORTD;
 #endif
 
 /* Globalna tablica poprzednikow wyliczana w algorytmie dijkstry.
@@ -193,6 +195,8 @@ static int kierunek(int ap, int np)
                 return SW;
             case (-L_KOLUMN-1):
                 return NW;
+            default:
+                return -1;
         }
     }
 }
@@ -422,15 +426,14 @@ void setup(){
     else if( digitalRead(A4) ){
         METODA_STEROWANIA = 'N';
     }
-    else if( digitalRead(A5) ){
+    if( digitalRead(A5) ){
         CEL = numer_wezla(odczytaj_karte(CZYTAJ_DO_SKUTKU));
-        EEPROM.write(1, CEL);
-        for(;;){}
+        //EEPROM.write(1, CEL);
+        while(digitalRead(A5)){
+            delay(10);
+        }
     }
-    else{
-        /* w przypadku gdyby zaden przelacznik nie byl przelaczony */
-        METODA_STEROWANIA = 'P';
-    }
+
 #ifdef ARDUINO_DB
     Serial.print("METODA_STEROWANIA=");
     Serial.print(METODA_STEROWANIA, BYTE);
@@ -460,32 +463,24 @@ void setup(){
     /** TODO: to powinno wygladac tak:
      ** Proba czytania karty az do skutku i wtedy
      ** start i jazda do przodu oraz ustawienia np */
-    POZ.pp = -1;
+    POZ.pp = POZ_NIEZNANA;
     /*
     if( POZ.ap = numer_wezla(odczytaj_karte(PROBKUJ)) == -1)
         POZ.ap = -1;
     */
-    POZ.ap = 15;
-    POZ.np = P[POZ.ap];
+    POZ.ap = numer_wezla(odczytaj_karte(CZYTAJ_DO_SKUTKU));
+    POZ.np = POZ_NIEZNANA;
 
 }
 
 /* GLOWNA PETLA PROGRAMU */
 void loop(){
-    /*
-   if(Serial.available() > 0){
-       //funkcja sprawdzajaca dzialanie przypisane do karty
-       DATA = Serial.read();
-       if(DATA == 56) { skrecajPrawo(); }
-       if(DATA == 55) { skrecajLewo(); } 
-       if(DATA == 49) { stop(); }
-       Serial.flush();
-   }*/
+
    //START
    if( POZ.ap != CEL)
        start();
 
-   while(POZ.ap){
+   while(POZ.ap != CEL){
        if(Serial.available() > 0){
            DATA = Serial.read();
            delay(10);               //ze wzgledu na bledy w odczycie
@@ -493,7 +488,6 @@ void loop(){
            DATA = DATA + Serial.read();
            delay(10);               //lekkie opoznienia
            Serial.flush();
-
 #ifdef ARDUINO_DB
            Serial.print("Warunek serial.avail > 0\t");
            Serial.print("DATA = ");
