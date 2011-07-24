@@ -59,6 +59,10 @@ struct wektor_ruchu{
     int np;
 }POZ;
 
+enum blok_t{
+    PRZESZKODY = 1,
+    CELE = 2
+};
 /* Kierunki */
 #define N 0
 #define E 3
@@ -106,7 +110,12 @@ static void kieruj(int, int, int);
 static int znajdz_nr_wezla(int, int, int);
 static int numer_wezla(int);
 
-static int polecenie(int);
+static void erase_eeprom(enum blok_t );
+static void zapisz_w_eeprom(int*, enum blok_t);
+static void programuj_pamiec(int*, enum blok_t, int);
+
+static void dodaj_przeszkode(int );
+static int odczytaj_karte(char );
 static void stop(void);
 static void start(void);
 static void skrecajLewo(void);
@@ -367,8 +376,7 @@ static void start(void){
 }
 
 /* TODO UWAGA: ta funkcje trzeba przetestwac pod katem 
- * narzutu czasowego, moze powinna byc inline ?
- * TODO: czy ta funkcja jest w ogóle potrzebna ?*/
+ * narzutu czasowego, moze powinna byc inline ? */
 static int odczytaj_karte(char probkuj)
 {
     volatile int data = 0;
@@ -388,16 +396,89 @@ static int odczytaj_karte(char probkuj)
             return data;
         }
     }while(!done);
+
+    return -1;          //powrot w przypadku nie udanego PROBKUJ
 }
 
-/* Polecenia od kart RFID 
- * TODO prawdopodobnie nie bedzi to potrzebne */
-#define ZATRZYMAJ 49
-#define JEDZ 50
-static int polecenie(int id_karty){
-    if( id_karty == ZATRZYMAJ) { stop(); }
-    else if( id_karty == JEDZ) { start();}
-    else return 0;
+/* Czysci pamiec eeprom. Bloki przeszkod lub celow.
+ * addr 0:      NIE UZYWANY - zalecenie ATMELA
+ * addr 1:      przechowuje liczbe przeszkod
+ * addr 2-10:   max dziewiec wezlow 'przeszkod'
+ * addr 11:     przechowuje liczbe celow
+ * addr 12-20:  max dziewiec wezlow 'cel'
+ */
+static void erase_eeprom(enum blok_t blok){
+    int i;
+
+    if(blok == PRZESZKODY){
+        for(i=1; i <= 10; i++)
+            EEPROM.write(i, NO_DEF);
+    }
+    else if(blok == CELE){
+        for(i=11; i <=20; i++)
+            EEPROM.write(i, NO_DEF);
+    }
+    return;
+}
+
+/* Ustawia INF w sasiadach danego wezla co jest 
+ * jednoznaczne z ustawieniem go jako przeszkody */
+static void dodaj_przeszkode(int przeszkoda){
+    int i;
+    for(i=0; i < L_KOLUMN; i++){
+        Q_P[przeszkoda][i] = INF;
+        Q_T[przeszkoda][i] = INF;
+    }
+}
+
+/* zaisuje tablice 'tab' w pamieci EEPROM w zaleznosci 
+ * od bloku ktory jest celem */
+static void zapisz_w_eeprom(int tab[], enum blok_t blok){
+    /* i- nr. bloku w EEPROM, k- licznik tablicy */
+    int i,k;
+
+    if(blok == PRZESZKODY){
+        for(i=2,k=0; tab[k] != -1; k++,i++){
+            EEPROM.write(i, tab[k]);
+        }
+        EEPROM.write(1, k);         // liczba wezlow 'przeszkoda'
+    }
+    else if(blok == CELE){
+        for(i=12,k=0; tab[k] != -1; k++,i++){
+            EEPROM.write(i, tab[k]);
+        }
+        EEPROM.write(11, k);        // liczba wezlow 'cel'
+    }
+}
+
+static void programuj_pamiec(int tab[], enum blok_t blok, int pin_look){
+    int wezel_do_zmiany = -1;           //zmienna pomocnicza, -1 gdyby nie przeczytano karty
+    int tab_przeszkod_celow[10] = {-1}; //tab. przekazywana do zapisana w eeprom
+    int k = 0;                          //licznik wprowadzonych wezlow do aktualizacji
+
+    erase_eeprom(blok);                 //czyszczenie calego eeprom przeszkod albo celow
+    while(digitalRead(pin_look)){       //w petli programowania dopuki nie przelaczono dipSwitcha
+        wezel_do_zmiany = numer_wezla(odczytaj_karte(PROBKUJ));
+        if(wezel_do_zmiany == -1)    
+            continue;                   //jesli nie odczytano karty lub nie znaleziono w bazie kart
+        /* TODO UWAGA NA TO [k-1] !!!
+         * tab_przeszkod_celow[k-1] sprawdzamy po to zeby nie dodac 2 razy tej samiej karty po sobie.
+         * Moze to wystapic kiedy przytrzymamy karte w polu odczytu dluzej. */
+        if(tab_przeszkod_celow[k-1] != wezel_do_zmiany && k < 9){
+            tab_przeszkod_celow[k] = wezel_do_zmiany;
+            k++;
+        }
+    }
+    if( blok == PRZESZKODY ){
+        for(k-=1; k >= 0; k--)
+            dodaj_przeszkode(tab_przeszkod_celow[k]);    //zmiana w obu siatkach/Q_P,Q_T
+    }
+    else if( blok == CELE ){
+        //dodaj do listy celow
+    }
+
+    zapisz_w_eeprom(tab_przeszkod_celow, blok);//zapisz w pamieci EEPROM
+    }
 }
 
 void setup(){
@@ -422,10 +503,33 @@ void setup(){
     }
     else if( digitalRead(A3) ){
         METODA_STEROWANIA = 'T';
-    }
-    else if( digitalRead(A4) ){
+    } else {
         METODA_STEROWANIA = 'N';
     }
+
+    /* Programowanie przeszkod */
+    if( digitalRead(A4) ){
+        int przeszkoda = -1;            //zmienna pomocnicza, -1 gdyby nie przeczytano karty
+        int tab_przeszkod[10] = {-1};   //tab. przekazywana do zapisana w eeprom
+        int k = 0;
+
+        erase_eeprom(PRZESZKODY);             //czyszczenie calego eeprom przeszkod
+        while(digitalRead(A4)){     //w petli programowania dopuki nie przelaczono dipSwitcha
+            przeszkoda = numer_wezla(odczytaj_karte(PROBKUJ));
+            if(przeszkoda == -1)    
+                continue;           //jesli nie odczytano karty lub nie znaleziono w bazie kart
+            if(tab_przeszkod[k-1] != przeszkoda && k < 10){ //TODO UWAGA NA TO [k-1] !!!
+                tab_przeszkod[k] = przeszkoda;
+                k++;
+            }
+        }
+        for(k-=1; k >= 0; k--)
+            dodaj_przeszkode(tab_przeszkod[k]);    //zmiana w obu siatkach/Q_P,Q_T
+
+        zapisz_w_eeprom(tab_przeszkod, PRZESZKODY);//zapisz w pamieci EEPROM
+    }
+
+    /* Programowanie celow */
     if( digitalRead(A5) ){
         CEL = numer_wezla(odczytaj_karte(CZYTAJ_DO_SKUTKU));
         //EEPROM.write(1, CEL);
@@ -495,11 +599,10 @@ void loop(){
            Serial.print("\n");
 #endif
            if( (numer_wezla(DATA)) == -1){
-               if(polecenie(DATA))
 #ifdef ARDUINO_DB
-                   Serial.print("Nierozpoznana karta\n");
+               Serial.print("Nierozpoznana karta\n");
 #endif
-                   continue;
+               continue;
            } else {
                POZ.pp = POZ.ap;
                POZ.ap = numer_wezla(DATA);
