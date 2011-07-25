@@ -28,11 +28,17 @@
 #ifdef PC_COMPILATION
 extern serial Serial;
 extern char PORTD;
+extern eeprom EEPROM;
 #endif
 
 /* Globalna tablica poprzednikow wyliczana w algorytmie dijkstry.
  * Wedlug niej laczymy wezly tworzac scierzke do wezla 'cel'*/
 int P[LICZBA_WEZLOW] = {0};
+
+/* Przechowuje kolejke celow 
+ * Jesli nie programowanio celow to jednym domyslnym celem 
+ * jest wezel 0 */
+int C[9] = {0,-1,-1,-1,-1,-1,-1,-1,-1};
 
 /* Definicja sasiadow poszczegolnych wezlow dla siatki prostokatnej*/
 int Q_P[][L_KOLUMN] =
@@ -89,6 +95,7 @@ enum blok_t{
 volatile int DATA = 0;          //odczytany baj nr karty
 int STARTSTOP = 0;              //info czy pojazd porusza sie
 int CEL = 0;                    //nr wezla do ktorego pojazd jedzie
+int LICZBA_CELOW = 0;           //liczba zdefinniowanych celow
 char METODA_STEROWANIA = 'P';   //info o typie siatki lub jej braku
 
 /* Przykladowe nr kart, posortowane! */
@@ -112,9 +119,10 @@ static int numer_wezla(int);
 
 static void erase_eeprom(enum blok_t );
 static void zapisz_w_eeprom(int*, enum blok_t);
-static void programuj_pamiec(int*, enum blok_t, int);
+static void programuj_pamiec(enum blok_t, int);
 
-static void dodaj_przeszkode(int );
+static void dodaj_przeszkode(int);
+static void dodaj_cel(int, int);
 static int odczytaj_karte(char );
 static void stop(void);
 static void start(void);
@@ -431,6 +439,14 @@ static void dodaj_przeszkode(int przeszkoda){
     }
 }
 
+static void dodaj_cel(int cel, int nr){
+   C[nr] = cel; 
+}
+
+static int liczba_celow(){
+    return EEPROM.read(11);
+}
+
 /* zaisuje tablice 'tab' w pamieci EEPROM w zaleznosci 
  * od bloku ktory jest celem */
 static void zapisz_w_eeprom(int tab[], enum blok_t blok){
@@ -438,22 +454,23 @@ static void zapisz_w_eeprom(int tab[], enum blok_t blok){
     int i,k;
 
     if(blok == PRZESZKODY){
-        for(i=2,k=0; tab[k] != -1; k++,i++){
+        for(i=2,k=0; tab[k] != -1; ++k,i++){
             EEPROM.write(i, tab[k]);
         }
         EEPROM.write(1, k);         // liczba wezlow 'przeszkoda'
     }
     else if(blok == CELE){
-        for(i=12,k=0; tab[k] != -1; k++,i++){
+        for(i=12,k=0; tab[k] != -1; ++k,i++){
             EEPROM.write(i, tab[k]);
         }
         EEPROM.write(11, k);        // liczba wezlow 'cel'
     }
 }
 
-static void programuj_pamiec(int tab[], enum blok_t blok, int pin_look){
+static void programuj_pamiec(enum blok_t blok, int pin_look){
     int wezel_do_zmiany = -1;           //zmienna pomocnicza, -1 gdyby nie przeczytano karty
-    int tab_przeszkod_celow[10] = {-1}; //tab. przekazywana do zapisana w eeprom
+    int tab_przeszkod_celow[10] =       //tab. przekazywana do zapisana w eeprom
+        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1}; 
     int k = 0;                          //licznik wprowadzonych wezlow do aktualizacji
 
     erase_eeprom(blok);                 //czyszczenie calego eeprom przeszkod albo celow
@@ -473,12 +490,12 @@ static void programuj_pamiec(int tab[], enum blok_t blok, int pin_look){
         for(k-=1; k >= 0; k--)
             dodaj_przeszkode(tab_przeszkod_celow[k]);    //zmiana w obu siatkach/Q_P,Q_T
     }
-    else if( blok == CELE ){
-        //dodaj do listy celow
+    else if( blok == CELE ){    //TODO: nadmiarowy warunek, wystarczy else ?
+        for(k-=1; k >= 0; k--)
+            dodaj_cel(tab_przeszkod_celow[k], k);
     }
 
     zapisz_w_eeprom(tab_przeszkod_celow, blok);//zapisz w pamieci EEPROM
-    }
 }
 
 void setup(){
@@ -509,33 +526,12 @@ void setup(){
 
     /* Programowanie przeszkod */
     if( digitalRead(A4) ){
-        int przeszkoda = -1;            //zmienna pomocnicza, -1 gdyby nie przeczytano karty
-        int tab_przeszkod[10] = {-1};   //tab. przekazywana do zapisana w eeprom
-        int k = 0;
-
-        erase_eeprom(PRZESZKODY);             //czyszczenie calego eeprom przeszkod
-        while(digitalRead(A4)){     //w petli programowania dopuki nie przelaczono dipSwitcha
-            przeszkoda = numer_wezla(odczytaj_karte(PROBKUJ));
-            if(przeszkoda == -1)    
-                continue;           //jesli nie odczytano karty lub nie znaleziono w bazie kart
-            if(tab_przeszkod[k-1] != przeszkoda && k < 10){ //TODO UWAGA NA TO [k-1] !!!
-                tab_przeszkod[k] = przeszkoda;
-                k++;
-            }
-        }
-        for(k-=1; k >= 0; k--)
-            dodaj_przeszkode(tab_przeszkod[k]);    //zmiana w obu siatkach/Q_P,Q_T
-
-        zapisz_w_eeprom(tab_przeszkod, PRZESZKODY);//zapisz w pamieci EEPROM
+        programuj_pamiec(PRZESZKODY, A4);
     }
-
     /* Programowanie celow */
     if( digitalRead(A5) ){
-        CEL = numer_wezla(odczytaj_karte(CZYTAJ_DO_SKUTKU));
-        //EEPROM.write(1, CEL);
-        while(digitalRead(A5)){
-            delay(10);
-        }
+        programuj_pamiec(CELE, A5);
+        LICZBA_CELOW = liczba_celow(); //odczytauje z EEPROMU liczbe celow
     }
 
 #ifdef ARDUINO_DB
@@ -547,13 +543,15 @@ void setup(){
     /* Generowanie tablicy kolejnych wezlow prowadzacych do celu,
      * lub w przypadku sterowania nadarznego: brak akcji */
     if( METODA_STEROWANIA == 'P'){
-        dijkstra(CEL, Q_P);
+        dijkstra(C[0], Q_P);
+        CEL = C[0];
 #ifdef ARDUINO_DB
         Serial.print("Powrot z: dijkstra(CEL, Q_P)\n");
 #endif
     }
     else if( METODA_STEROWANIA == 'T'){
-        dijkstra(CEL, Q_T);
+        dijkstra(C[0], Q_T);
+        CEL = C[0];
 #ifdef ARDUINO_DB
         Serial.print("Powrot z: dijkstra(CEL, Q_T)\n");
 #endif
@@ -568,10 +566,6 @@ void setup(){
      ** Proba czytania karty az do skutku i wtedy
      ** start i jazda do przodu oraz ustawienia np */
     POZ.pp = POZ_NIEZNANA;
-    /*
-    if( POZ.ap = numer_wezla(odczytaj_karte(PROBKUJ)) == -1)
-        POZ.ap = -1;
-    */
     POZ.ap = numer_wezla(odczytaj_karte(CZYTAJ_DO_SKUTKU));
     POZ.np = POZ_NIEZNANA;
 
@@ -579,7 +573,7 @@ void setup(){
 
 /* GLOWNA PETLA PROGRAMU */
 void loop(){
-
+    int k = 0;
    //START
    if( POZ.ap != CEL)
        start();
@@ -616,10 +610,21 @@ void loop(){
 #endif
            }
            if(POZ.ap == CEL){
+               k++;                     //Kolejny cel osiagniety
 #ifdef ARDUINO_DB
                Serial.print("Cel osiagniety!, silniki stop\n");
 #endif
-               stop();
+               if(k >= LICZBA_CELOW)    //Wszystkie cele osiagniete ?
+                   stop();
+               else{
+                   CEL = C[k];
+                   if(METODA_STEROWANIA == 'P')
+                       dijkstra(C[k], Q_P);
+                   else if(METODA_STEROWANIA == 'T')
+                       dijkstra(C[k], Q_T);
+                   POZ.np = P[POZ.ap]; //Aktualizacja nastepnego wezla
+                   kieruj(POZ.pp, POZ.ap, POZ.np);
+               }
            }
            else
                kieruj(POZ.pp, POZ.ap, POZ.np);
