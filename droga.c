@@ -69,15 +69,6 @@ enum blok_t{
     PRZESZKODY = 1,
     CELE = 2
 };
-/* Kierunki */
-#define N 0
-#define E 3
-#define S 6
-#define W 9
-#define NE 2
-#define NW 10
-#define SE 5
-#define SW 7
 
 /*********** HARDWARE *************/
 /* Zwiazane z funkcja odczytaj_karte */
@@ -86,10 +77,6 @@ enum blok_t{
 
 /* SILNIKI */
 #define CZAS_SKRETU_90_STOPNI 2000
-
-#define SILNIK_LEWY 2
-#define SILNIK_PRAWY 3
-#define SILNIKI_AKTYWNE 4
 
 /* STAN POJAZDU */
 int CEL = 0;                    //nr wezla do ktorego pojazd jedzie
@@ -119,7 +106,7 @@ static void erase_eeprom(enum blok_t );
 static void zapisz_w_eeprom(int*, enum blok_t);
 static void programuj_pamiec(enum blok_t, int);
 static void zaladuj_eeprom();
-inline static void liczba_celow();
+inline static int liczba_celow();
 
 static void dodaj_przeszkode(int);
 static void dodaj_cel(int, int);
@@ -183,6 +170,16 @@ static int znajdz_nr_wezla(int id, int poczatek, int koniec)
 
     return -1;
 }
+
+/* Kierunki */
+#define N 0
+#define E 3
+#define S 6
+#define W 9
+#define NE 2
+#define NW 10
+#define SE 5
+#define SW 7
 
 /* Okresla kierunek na podstawie punktu poczatkowego
  * i punktu nastepnego */
@@ -379,7 +376,7 @@ static void skrecajPrawo(void){
 
 /* Zatrzymanie pojazdu */
 static void stop(void){
-    PORTD &= ~((1<<2)|(1<<3)|(1<<4))
+    PORTD &= ~((1<<2)|(1<<3)|(1<<4));
 #ifdef ARDUINO_DB
     Serial.print("Cel osiagniety!, silniki stop\n");
 #endif
@@ -516,6 +513,10 @@ static void zaladuj_eeprom(){
         dodaj_cel(EEPROM.read(shift_c + k), k);
     }
 }
+
+#define SILNIK_LEWY 2
+#define SILNIK_PRAWY 3
+#define SILNIKI_AKTYWNE 4
 
 void setup(){
     /* inicjalizacja komunikacji szerogowej z modulem RFID */
