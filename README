@@ -1,0 +1,13 @@
+
+ORGANIZACJA PAMIECI EEPROM:
+*--------------------------------------------------*
+|    0    |    1    | 2...10  |    11   | 12...20  | addr.
+|         |l.przeszk|'przeszk'|l. celow | 'cele'   | definicja
+*--------------------------------------------------*
+ 
+Adres 0 jest pusty - patrz zalecenia atmela o pamieci EEPROM
+Adres 1 - przechowuje liczbe zdefiniowanych przeszkod
+Adres 2..10 - numery wezlow oznaczonych jako przeszkody
+Adres 11 - liczba zdefinowanych celow
+Adres 12..20 - numery wezlow 'celow'
+
