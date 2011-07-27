@@ -180,6 +180,8 @@ static int znajdz_nr_wezla(int id, int poczatek, int koniec)
     else if( id < ID_KART[index] ){
         return znajdz_nr_wezla(id, poczatek, index -1);
     }
+
+    return -1;
 }
 
 /* Okresla kierunek na podstawie punktu poczatkowego
@@ -216,6 +218,7 @@ static int kierunek(int ap, int np)
                 return -1;
         }
     }
+    return -1;
 }
 
 /* Decyduje o wywalaniu skretu w ktoras ze stron lub jezdzie na wprost*/
@@ -234,14 +237,14 @@ static void kieruj(int pp, int ap, int np)
         return;
     }
 
-    else if(  (orientacja == N) && (nastepny_kierunek == W) 
-            ||(orientacja == E) && (nastepny_kierunek == N)
-            ||(orientacja == S) && (nastepny_kierunek == E)
-            ||(orientacja == W) && (nastepny_kierunek == S)
-            ||(orientacja ==NE) && (nastepny_kierunek ==NW)
-            ||(orientacja ==SE) && (nastepny_kierunek ==NE)
-            ||(orientacja ==SW) && (nastepny_kierunek ==SE)
-            ||(orientacja ==NW) && (nastepny_kierunek ==SW) )
+    else if(  ((orientacja == N) && (nastepny_kierunek == W)) 
+            ||((orientacja == E) && (nastepny_kierunek == N))
+            ||((orientacja == S) && (nastepny_kierunek == E))
+            ||((orientacja == W) && (nastepny_kierunek == S))
+            ||((orientacja ==NE) && (nastepny_kierunek ==NW))
+            ||((orientacja ==SE) && (nastepny_kierunek ==NE))
+            ||((orientacja ==SW) && (nastepny_kierunek ==SE))
+            ||((orientacja ==NW) && (nastepny_kierunek ==SW)) )
     {
 #ifdef ARDUINO_DB
         Serial.print("kieruj:skrecam w lewo\n");
@@ -249,14 +252,14 @@ static void kieruj(int pp, int ap, int np)
             skrecajLewo();
     }
 
-    else if(  (orientacja == N) && (nastepny_kierunek == E)
-            ||(orientacja == E) && (nastepny_kierunek == S)
-            ||(orientacja == S) && (nastepny_kierunek == W)
-            ||(orientacja == W) && (nastepny_kierunek == N) 
-            ||(orientacja ==NE) && (nastepny_kierunek ==SE)
-            ||(orientacja ==SE) && (nastepny_kierunek ==SW)
-            ||(orientacja ==SW) && (nastepny_kierunek ==NW)
-            ||(orientacja ==NW) && (nastepny_kierunek ==NE) )
+    else if(  ((orientacja == N) && (nastepny_kierunek == E))
+            ||((orientacja == E) && (nastepny_kierunek == S))
+            ||((orientacja == S) && (nastepny_kierunek == W))
+            ||((orientacja == W) && (nastepny_kierunek == N)) 
+            ||((orientacja ==NE) && (nastepny_kierunek ==SE))
+            ||((orientacja ==SE) && (nastepny_kierunek ==SW))
+            ||((orientacja ==SW) && (nastepny_kierunek ==NW))
+            ||((orientacja ==NW) && (nastepny_kierunek ==NE)) )
     {
 #ifdef ARDUINO_DB
         Serial.print("kieruj:skrecam w prawo\n");
@@ -374,6 +377,7 @@ static void skrecajPrawo(void){
 /* Zatrzymanie pojazdu */
 static void stop(void){
     PORTD &= 0b11100011;
+    //PORTD &= ~((1<<2)|(1<<3)|(1<<4))
     return;
 }
 
@@ -469,8 +473,8 @@ static void zapisz_w_eeprom(int tab[], enum blok_t blok){
 
 static void programuj_pamiec(enum blok_t blok, int pin_look){
     int wezel_do_zmiany = -1;           //zmienna pomocnicza, -1 gdyby nie przeczytano karty
-    int tab_przeszkod_celow[10] =       //tab. przekazywana do zapisana w eeprom
-        {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1}; 
+    int tab_przeszkod_celow[9] =       //tab. przekazywana do zapisana w eeprom
+        {-1,-1,-1,-1,-1,-1,-1,-1,-1}; 
     int k = 0;                          //licznik wprowadzonych wezlow do aktualizacji
 
     erase_eeprom(blok);                 //czyszczenie calego eeprom przeszkod albo celow
@@ -498,6 +502,22 @@ static void programuj_pamiec(enum blok_t blok, int pin_look){
     zapisz_w_eeprom(tab_przeszkod_celow, blok);//zapisz w pamieci EEPROM
 }
 
+static void zaladuj_eeprom(){
+    int k = 0;                  //licznik petli
+    int l_p = EEPROM.read(1);   //liczba przeszkod
+    int l_c = EEPROM.read(11);  //liczba celow
+    const int shitf_P = 2;      //przesuniecia indexu w pamieci dla przeszkod
+    const int shift_c = 12;     //przesuniecie dla celow
+
+    for(k = 0; k < l_p; k++){
+        dodaj_przeszkode(EEPROM.read(k+shitf_p));
+    }
+
+    for(k = 0; k < l_c; k++){
+        dodaj_cel(EEPROM.read(k+shift_c, k));
+    }
+}
+
 void setup(){
     /* inicjalizacja komunikacji szerogowej z modulem RFID */
     Serial.begin(9600);
@@ -512,7 +532,6 @@ void setup(){
     pinMode(A3, INPUT);
     pinMode(A4, INPUT);
     pinMode(A5, INPUT);
-
 
     /* Odczyt rodzaju siatki/sterowania, lub celu */
     if( digitalRead(A2) ){
@@ -560,11 +579,11 @@ void setup(){
     /* Po starcie pojazd nie porusza sie */
     stop();
 
-    /* Inicjalizajcia struktury z informacja o
-     * pozycjach robota */
-    /** TODO: to powinno wygladac tak:
-     ** Proba czytania karty az do skutku i wtedy
-     ** start i jazda do przodu oraz ustawienia np */
+    /* 
+     * Inicjalizajcia struktury z informacja o
+     * pozycjach robota. Robot nie wystartuje
+     * dopoki nie odczyta pierwszej karty
+     */
     POZ.pp = POZ_NIEZNANA;
     POZ.ap = numer_wezla(odczytaj_karte(CZYTAJ_DO_SKUTKU));
     POZ.np = POZ_NIEZNANA;
@@ -579,6 +598,9 @@ void loop(){
        start();
 
    while(POZ.ap != CEL){
+           /********************************************/
+           /*** Odczyt karty znajdujacej sie pod pojazdem
+           /********************************************/   
        if(Serial.available() > 0){
            DATA = Serial.read();
            delay(10);               //ze wzgledu na bledy w odczycie
@@ -592,11 +614,15 @@ void loop(){
            Serial.print(DATA, DEC);
            Serial.print("\n");
 #endif
+           /*** Obsluga blednego odczytania karty    ***/
            if( (numer_wezla(DATA)) == -1){
 #ifdef ARDUINO_DB
                Serial.print("Nierozpoznana karta\n");
 #endif
                continue;
+           /********************************************/
+           /*** Aktualizacjie informacji o pozycjach ***/
+           /********************************************/   
            } else {
                POZ.pp = POZ.ap;
                POZ.ap = numer_wezla(DATA);
@@ -609,6 +635,10 @@ void loop(){
                Serial.print("\n");
 #endif
            }
+           /*********************************************/
+           /*** Obsluga zdarzenia 'dotarcie do celu', ***/
+           /*** lub dalsze sterowanie pojazdem        ***/
+           /*********************************************/
            if(POZ.ap == CEL){
                k++;                     //Kolejny cel osiagniety
 #ifdef ARDUINO_DB
@@ -626,6 +656,9 @@ void loop(){
                    kieruj(POZ.pp, POZ.ap, POZ.np);
                }
            }
+           /*********************************************/
+           /*** Pojazd nie w celu - steruj poj. dalej ***/
+           /*********************************************/
            else
                kieruj(POZ.pp, POZ.ap, POZ.np);
        }
