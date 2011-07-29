@@ -101,6 +101,8 @@ static int kierunek(int, int);
 static void kieruj(int, int, int);
 static int znajdz_nr_wezla(int, int, int);
 static int numer_wezla(int);
+static void wyklucz_wezel(int w_s, int Q[][L_KOLUMN]);
+static void przywroc_wezel(int Q[][L_KOLUMN]);
 
 static void erase_eeprom(enum blok_t );
 static void zapisz_w_eeprom(int*, enum blok_t);
@@ -225,8 +227,8 @@ static void kieruj(int pp, int ap, int np)
     int nastepny_kierunek = kierunek(ap, np);
 
     if( orientacja == nastepny_kierunek
-            || orientacja == -1
-            || nastepny_kierunek == -1 )
+          || orientacja == -1
+          || nastepny_kierunek == -1 )
     {
 #ifdef ARDUINO_DB
         Serial.print("kieruj:jazda prosto\n");
@@ -246,7 +248,7 @@ static void kieruj(int pp, int ap, int np)
 #ifdef ARDUINO_DB
         Serial.print("kieruj:skrecam w lewo\n");
 #endif
-            skrecajLewo();
+        skrecajLewo();
     }
 
     else if(  ((orientacja == N) && (nastepny_kierunek == E))
@@ -259,7 +261,7 @@ static void kieruj(int pp, int ap, int np)
             ||((orientacja ==NW) && (nastepny_kierunek ==NE)) )
     {
 #ifdef ARDUINO_DB
-        Serial.print("kieruj:skrecam w prawo\n");
+            Serial.print("kieruj:skrecam w prawo\n");
 #endif
             skrecajPrawo();
     }
@@ -307,7 +309,7 @@ static void dijkstra(int cel, int Q[][L_KOLUMN]){
     int v; //aktualnie badany wezel
     for(i = 0; i < LICZBA_WEZLOW; i++){
         v = minimum(d, LICZBA_WEZLOW, inS); //index najmniejszego wezla
-        /* przsuwamy wezel do zbioru S */
+       /* przsuwamy wezel do zbioru S */
         inS[v] = 1;
 
         /* sasiedzi */
@@ -319,7 +321,7 @@ static void dijkstra(int cel, int Q[][L_KOLUMN]){
                     d[Q[v][j]] = h; //waga + waga poprzednika
                 }
             }
-        }
+       }
 
     }
 #ifdef PC_COMPILATION
@@ -332,19 +334,28 @@ static void drukuj_wyniki(int* d, int* p){
     int x = 0;
     printf("Q:");
     for(x=0; x < LICZBA_WEZLOW; x++){
-        printf("%i ", x);
+        if(x > 9)
+            printf("%i ", x);
+        else
+            printf("%i  ", x);
     }
     printf("\n");
     
     printf("d:");
     for(x=0; x < LICZBA_WEZLOW; x++){
-        printf("%i ", d[x]);
+        if(d[x] > 9)
+            printf("%i ", d[x]);
+        else
+            printf("%i  ", d[x]);
     }
     printf("\n");
 
     printf("P:");
     for(x=0; x < LICZBA_WEZLOW; x++){
-        printf("%i ", p[x]);
+        if(p[x] > 9)
+            printf("%i ", p[x]);
+        else
+            printf("%i  ", p[x]);
     }
     printf("\n");
 }
@@ -378,7 +389,7 @@ static void skrecajPrawo(void){
 static void stop(void){
     PORTD &= ~((1<<2)|(1<<3)|(1<<4));
 #ifdef ARDUINO_DB
-    Serial.print("Cel osiagniety!, silniki stop\n");
+    Serial.print("Silniki stop\n");
 #endif
     return;
 }
@@ -386,6 +397,9 @@ static void stop(void){
 /* Uruchomienie silniczkow pojazdu */
 static void start(void){
     PORTD |= (1<<2)|(1<<3)|(1<<4);
+#ifdef ARDUINO_DB
+    Serial.print("start()-silniki uruchomione\n");
+#endif
     return;
 }
 
@@ -514,6 +528,45 @@ static void zaladuj_eeprom(){
     }
 }
 
+int BUFF_W[5] = {INF,INF,INF,INF,INF};
+static void wyklucz_wezel(int w_s, int Q[][L_KOLUMN])
+{
+    BUFF_W[4] = w_s;
+    int k = 0, x = 0;
+
+    while(Q[w_s][k] != INF && k < 4){
+        BUFF_W[k] = Q[w_s][k];        //kopiowanie sasiadow w_s do buff
+        k++;
+    }
+
+    k = 0;
+    while(BUFF_W[k] != INF && k < 4){                      //spr. kolejnych sasiadow
+        while( Q[BUFF_W[k]][x] != INF && x < 4 ){   //spr. wartosci w wezle sasiedzie
+            if(Q[BUFF_W[k]][x] == w_s){
+               Q[BUFF_W[k]][x] = INF;       //zmiana na INF dla wartosci rownej w_s
+            }
+            x++;
+        }
+        k++;
+        x=0;
+    }
+}
+
+static void przywroc_wezel(int Q[][L_KOLUMN])
+{
+    int k = 0, x = 0;
+
+    while(BUFF_W[k] != INF && k < 4){
+        while( Q[BUFF_W[k]][x] != INF && x < 4){
+            x++;
+            continue;
+        }
+        Q[BUFF_W[k]][x] = BUFF_W[4];
+        k++;
+        x=0;
+    }
+}
+
 #define SILNIK_LEWY 2
 #define SILNIK_PRAWY 3
 #define SILNIKI_AKTYWNE 4
@@ -532,6 +585,9 @@ void setup(){
     pinMode(A3, INPUT);
     pinMode(A4, INPUT);
     pinMode(A5, INPUT);
+
+    /* Po starcie pojazd nie porusza sie */
+    stop();
 
     /* Odczyt rodzaju siatki/sterowania, lub celu */
     if( digitalRead(A2) ){
@@ -562,9 +618,20 @@ void setup(){
     Serial.print("\n");
 #endif
 
+    /* 
+     * Inicjalizajcia struktury z informacja o
+     * pozycjach robota. Robot nie wystartuje
+     * i nie wygeneruje tablicy sasiedztwa,
+     * dopoki nie odczyta pierwszej karty.
+     */
+    POZ.pp = POZ_NIEZNANA;
+    POZ.ap = numer_wezla(odczytaj_karte(CZYTAJ_DO_SKUTKU));
+    POZ.np = POZ_NIEZNANA;
+
     /* Generowanie tablicy kolejnych wezlow prowadzacych do celu,
      * lub w przypadku sterowania nadarznego: brak akcji */
     if( METODA_STEROWANIA == 'P'){
+        wyklucz_wezel(POZ.ap, Q_P);
         dijkstra(C[0], Q_P);
         CEL = C[0];
 #ifdef ARDUINO_DB
@@ -572,24 +639,13 @@ void setup(){
 #endif
     }
     else if( METODA_STEROWANIA == 'T'){
+        wyklucz_wezel(POZ.ap, Q_T);
         dijkstra(C[0], Q_T);
         CEL = C[0];
 #ifdef ARDUINO_DB
         Serial.print("Powrot z: dijkstra(CEL, Q_T)\n");
 #endif
     }
-
-    /* Po starcie pojazd nie porusza sie */
-    stop();
-
-    /* 
-     * Inicjalizajcia struktury z informacja o
-     * pozycjach robota. Robot nie wystartuje
-     * dopoki nie odczyta pierwszej karty
-     */
-    POZ.pp = POZ_NIEZNANA;
-    POZ.ap = numer_wezla(odczytaj_karte(CZYTAJ_DO_SKUTKU));
-    POZ.np = POZ_NIEZNANA;
 
 }
 
@@ -649,10 +705,16 @@ void loop(){
                    stop();
                else{
                    CEL = C[k];
-                   if(METODA_STEROWANIA == 'P')
+                   if(METODA_STEROWANIA == 'P'){
+                       przywroc_wezel(Q_P);
+                       wyklucz_wezel(POZ.pp, Q_P);
                        dijkstra(C[k], Q_P);
-                   else if(METODA_STEROWANIA == 'T')
+                   }
+                   else if(METODA_STEROWANIA == 'T'){
+                       przywroc_wezel(Q_T);
+                       wyklucz_wezel(POZ.pp, Q_T);
                        dijkstra(C[k], Q_T);
+                   }
                    POZ.np = P[POZ.ap]; //Aktualizacja nastepnego wezla
                    kieruj(POZ.pp, POZ.ap, POZ.np);
                }
@@ -667,15 +729,14 @@ void loop(){
 }
 
 /* TODO:
- * * Ciagle po wlaczenie i wylaczeniu karta, jedno z kol 
- * * wchodzi w tryb skrecania. -moze cos z napieciami ?
- * * moze trzeba stopowac i statrtowac pinem 4 ?
- * * A moze syf w buforze uarta ? Serial.flush() przed czytaniem?->
- * * raczej nie... wydaje sie ze karty sa czytane idealnie.
+ * Jesli nie zdefinniowano celu to wczytywany jest domyslny
+ * wezel '0' - to jest ok ale, LICZBA_CELOW jest rowna 0 - dziala
+ * poprawnie ale troche nie logiczne.
  *
- * * Zrobic porzadek z interfejsem silnikow
- *
- * * while(POZ.ap) ? a co jestli wezel '0' nie jest celem tylko
- * * punktem przejazdowym ? Poprawic.
+ * Poprawke bledu cofania. Czy zamiast funkcji wyklucz_wezel
+ * i przywroc_wezel nie mozna zastosowac funkcji dodawania 
+ * przeszkod? Tak czy siak nie jest obliczana droga z wezla 'wykluczanego'
+ * a zakladamy brak mozliwosci wjazdu do wezla wykluczanego. Kolejna sprawa
+ * to: kiedy przywracac wezel do sieci i jak? Po generacji tablicy P?
  */
 
