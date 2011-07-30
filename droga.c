@@ -1,6 +1,7 @@
 /*
  * Lukasz Panek
  * Sterowanie robotem RFID
+ * Galaz optymalizacja
  */
 
 #define PC_COMPILATION
