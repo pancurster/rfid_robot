@@ -302,11 +302,11 @@ static void dijkstra(int cel, int Q[][L_KOLUMN]){
         d[i] = NO_DEF;
     }
 
-    d[cel] = 0; //droga do celu z niego samego jest rowna 0
-    P[cel] = cel; //cel nie ma poprzednika
+    d[cel] = 0;     //droga do celu z niego samego jest rowna 0
+    P[cel] = cel;   //cel nie ma poprzednika
 
-    int h = 0; //pomocnicza
-    int v; //aktualnie badany wezel
+    int h = 0;      //pomocnicza
+    int v;          //aktualnie badany wezel
     for(i = 0; i < LICZBA_WEZLOW; i++){
         v = minimum(d, LICZBA_WEZLOW, inS); //index najmniejszego wezla
        /* przsuwamy wezel do zbioru S */
