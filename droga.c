@@ -531,39 +531,24 @@ static void zaladuj_eeprom(){
 int BUFF_W[5] = {INF,INF,INF,INF,INF};
 static void wyklucz_wezel(int w_s, int Q[][L_KOLUMN])
 {
-    BUFF_W[4] = w_s;
-    int k = 0, x = 0;
+    int x = 0;
 
-    while(Q[w_s][k] != INF && k < 4){
-        BUFF_W[k] = Q[w_s][k];        //kopiowanie sasiadow w_s do buff
-        k++;
+    while( x < 4 ){
+        BUFF_W[x] = Q[w_s][x];  //zapamietane zeby przywrocic sasiadow wezla
+        x++;
     }
+    BUFF_W[4] = w_s;            //numer wezla usunietego
 
-    k = 0;
-    while(BUFF_W[k] != INF && k < 4){                      //spr. kolejnych sasiadow
-        while( Q[BUFF_W[k]][x] != INF && x < 4 ){   //spr. wartosci w wezle sasiedzie
-            if(Q[BUFF_W[k]][x] == w_s){
-               Q[BUFF_W[k]][x] = INF;       //zmiana na INF dla wartosci rownej w_s
-            }
-            x++;
-        }
-        k++;
-        x=0;
-    }
+    dodaj_przeszkode(w_s);
 }
 
 static void przywroc_wezel(int Q[][L_KOLUMN])
 {
-    int k = 0, x = 0;
+    int x = 0;
 
-    while(BUFF_W[k] != INF && k < 4){
-        while( Q[BUFF_W[k]][x] != INF && x < 4){
-            x++;
-            continue;
-        }
-        Q[BUFF_W[k]][x] = BUFF_W[4];
-        k++;
-        x=0;
+    while( x < 4 ){
+        Q[BUFF_W[4]][x] = BUFF_W[x];
+        x++;
     }
 }
 
@@ -733,10 +718,5 @@ void loop(){
  * wezel '0' - to jest ok ale, LICZBA_CELOW jest rowna 0 - dziala
  * poprawnie ale troche nie logiczne.
  *
- * Poprawke bledu cofania. Czy zamiast funkcji wyklucz_wezel
- * i przywroc_wezel nie mozna zastosowac funkcji dodawania 
- * przeszkod? Tak czy siak nie jest obliczana droga z wezla 'wykluczanego'
- * a zakladamy brak mozliwosci wjazdu do wezla wykluczanego. Kolejna sprawa
- * to: kiedy przywracac wezel do sieci i jak? Po generacji tablicy P?
  */
 
