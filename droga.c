@@ -80,9 +80,9 @@ enum blok_t{
 #define CZAS_SKRETU_90_STOPNI 2000
 
 /* STAN POJAZDU */
-int CEL = 0;                    //nr wezla do ktorego pojazd jedzie
-int LICZBA_CELOW = 0;           //liczba zdefinniowanych celow
-char METODA_STEROWANIA = 'P';   //info o typie siatki lub jej braku
+volatile int CEL = 0;                    //nr wezla do ktorego pojazd jedzie
+volatile int LICZBA_CELOW = 0;           //liczba zdefinniowanych celow
+volatile char METODA_STEROWANIA = 'P';   //info o typie siatki lub jej braku
 
 /* Przykladowe nr kart, posortowane! */
 const int ID_KART[LICZBA_WEZLOW] = 
@@ -109,6 +109,7 @@ static void erase_eeprom(const enum blok_t );
 static void zapisz_w_eeprom(const int* tab, const enum blok_t);
 static void programuj_pamiec(const enum blok_t, const int);
 static void zaladuj_eeprom(void);
+static void zrzut_eeprom(void);
 inline static int liczba_celow(void);
 
 static void dodaj_przeszkode(const int);
@@ -363,6 +364,33 @@ static void drukuj_wyniki(const int* d, const int* p){
 }
 #endif
 
+#ifdef ARDUINO_DB
+static void zrzut_eeprom(void)
+{
+    int i;
+    uint8_t val;
+    for(i = 0; i < 21; i++){
+        Serial.print(i, DEC);
+        if(i < 10)
+            Serial.print("   ");
+        else if( i > 9 )
+            Serial.print("  ");
+    }
+    Serial.print("\n");
+    for(i = 0; i < 21; i++){
+        val = EEPROM.read(i);
+        Serial.print(val, DEC);
+        if( val < 10 )
+            Serial.print("   ");
+        else if( val > 9 && val < 100)
+            Serial.print("  ");
+        else
+            Serial.print(" ");
+    }
+    Serial.print("\n");
+}
+#endif
+
 /* Obsluga sretu w lewo */
 static void skrecajLewo(void){
 #ifdef ARDUINO_DB
@@ -470,6 +498,7 @@ inline static int liczba_celow(void){
 
 /* zaisuje tablice 'tab' w pamieci EEPROM w zaleznosci 
  * od bloku ktory jest celem */
+#define WRITE_TIME_EEPROM 5
 static void zapisz_w_eeprom(const int tab[], const enum blok_t blok){
     /* i- nr. bloku w EEPROM, k- licznik tablicy */
     int k;
@@ -481,11 +510,13 @@ static void zapisz_w_eeprom(const int tab[], const enum blok_t blok){
     if(blok == PRZESZKODY){
         for(k=0; tab[k] != -1; k++){
             EEPROM.write(shift_p + k, tab[k]);
+            delay(WRITE_TIME_EEPROM);
         }
         EEPROM.write(1, k);         // liczba wezlow 'przeszkoda'
     } else {                        //CELE
         for(k=0; tab[k] != -1; k++){
             EEPROM.write(shift_c + k, tab[k]);
+            delay(WRITE_TIME_EEPROM);
         }
         EEPROM.write(11, k);        // liczba wezlow 'cel'
     }
@@ -515,9 +546,19 @@ static void programuj_pamiec(const enum blok_t blok, const int pin_look){
 }
 
 static void zaladuj_eeprom(void){
+#ifdef ARDUINO_DB
+    Serial.print("Wywolanie zaladuj_eeprom \n");
+#endif
     int k = 0;                  //licznik petli
     int l_p = EEPROM.read(1);   //liczba przeszkod
     int l_c = EEPROM.read(11);  //liczba celow
+#ifdef ARDUINO_DB
+    Serial.print("Wartosc kolejno l_p i l_c: ");
+    Serial.print(l_p, DEC);
+    Serial.print(" ");
+    Serial.print(l_c, DEC);
+    Serial.print("\n");
+#endif
     const int shift_p = 2;      //przesuniecia indexu w pamieci dla przeszkod
     const int shift_c = 12;     //przesuniecie dla celow
 
@@ -593,7 +634,8 @@ void setup(){
     }
     else if( digitalRead(A3) ){
         METODA_STEROWANIA = 'T';
-    } else {
+    } 
+    else if( digitalRead(A2) && digitalRead(A3) ){
         METODA_STEROWANIA = 'N';
     }
 
@@ -608,12 +650,16 @@ void setup(){
 
     /* Po programowaniu lub nie nalezy wczytac ustawienia z EEPROM */
     zaladuj_eeprom();
+#ifdef ARDUINO_DB
+    zrzut_eeprom();
+#endif
     LICZBA_CELOW = liczba_celow();
 
 #ifdef ARDUINO_DB
     Serial.print("METODA_STEROWANIA=");
     Serial.print(METODA_STEROWANIA, BYTE);
     Serial.print("\n");
+    Serial.print("Czekam na wybor karty startowej:\n");
 #endif
 
     /* 
