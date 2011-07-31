@@ -1,7 +1,7 @@
 /*
  * Lukasz Panek
  * Sterowanie robotem RFID
- * Galaz optymalizacja
+ * Galez optymalizacja
  */
 
 #define PC_COMPILATION
@@ -42,7 +42,7 @@ int P[LICZBA_WEZLOW] = {0};
 int C[9] = {0,-1,-1,-1,-1,-1,-1,-1,-1};
 
 /* Definicja sasiadow poszczegolnych wezlow dla siatki prostokatnej*/
-int Q_P[][L_KOLUMN] =
+uint8_t Q_P[][L_KOLUMN] =
 {
     {1,4,INF,INF}, {0,2,5,INF}, {1,3,6,INF}, {2,7,INF,INF},
     {0,5,8,INF}, {1,6,9,4}, {2,7,10,5}, {3,11,6,INF},
@@ -51,7 +51,7 @@ int Q_P[][L_KOLUMN] =
 };
 
 /* Definicja sasiadow poszczegolnych wezlow dla siatki trojkatnej*/
-int Q_T[][L_KOLUMN] =
+uint8_t Q_T[][L_KOLUMN] =
 {
     {4,INF,INF,INF}, {4,5,INF,INF}, {5,6,INF,INF}, {6,7,INF,INF},
     {0,1,8,9}, {1,2,9,10}, {2,3,10,11}, {3,11,INF,INF},
@@ -85,39 +85,40 @@ int LICZBA_CELOW = 0;           //liczba zdefinniowanych celow
 char METODA_STEROWANIA = 'P';   //info o typie siatki lub jej braku
 
 /* Przykladowe nr kart, posortowane! */
-int ID_KART[LICZBA_WEZLOW] = 
+const int ID_KART[LICZBA_WEZLOW] = 
 { 
     4850,4867,4967,5054,
     5065,5070,5166,5255,
     5269,5348,5349,5450,
     5452,5555,5566,5648
 };
-/***** KONIEC DEKLARACJI **********/
+/***** KONIEC DEKLARACJI ZMIENNYCH **********/
 
 
-static void dijkstra(int, int[][L_KOLUMN]);
-static void drukuj_wyniki(int*, int*);
-static int minimum(int*, int, int*);
-static int kierunek(int, int);
-static void kieruj(int, int, int);
-static int znajdz_nr_wezla(int, int, int);
-static int numer_wezla(int);
-static void wyklucz_wezel(int w_s, int Q[][L_KOLUMN]);
-static void przywroc_wezel(int Q[][L_KOLUMN]);
+static void dijkstra(const int, const uint8_t Q[][L_KOLUMN]);
+static void drukuj_wyniki(const int*, const int*);
+static int minimum(const int*, const int, const int*);
+static int kierunek(const int, const int);
+static void kieruj(const int, const int, const int);
+static int znajdz_nr_wezla(const int, const int, const int);
+static int numer_wezla(const int);
+static void wyklucz_wezel(const int w_s, uint8_t Q[][L_KOLUMN]);
+static void przywroc_wezel(uint8_t Q[][L_KOLUMN]);
 
-static void erase_eeprom(enum blok_t );
-static void zapisz_w_eeprom(int*, enum blok_t);
-static void programuj_pamiec(enum blok_t, int);
-static void zaladuj_eeprom();
-inline static int liczba_celow();
+static void erase_eeprom(const enum blok_t );
+static void zapisz_w_eeprom(const int* tab, const enum blok_t);
+static void programuj_pamiec(const enum blok_t, const int);
+static void zaladuj_eeprom(void);
+inline static int liczba_celow(void);
 
-static void dodaj_przeszkode(int);
-static void dodaj_cel(int, int);
-static int odczytaj_karte(char );
+static void dodaj_przeszkode(const int);
+static void dodaj_cel(const int, const int);
+static int odczytaj_karte(const char);
 static void stop(void);
 static void start(void);
 static void skrecajLewo(void);
 static void skrecajPrawo(void);
+static void error(void);
 void setup();
 void loop();
 
@@ -149,13 +150,13 @@ int main(int argc, char* argv[])
 
 /* uproszczenie wywolania fun. znajdz_nr_wezla.
  * Wyszukuje w fizycznych numerach kart RFID index danej karty */
-static int numer_wezla(int id)
+static int numer_wezla(const int id)
 {
     return znajdz_nr_wezla(id, 0, LICZBA_WEZLOW-1);
 }
 
 /* Przeszukiwanie binarne */
-static int znajdz_nr_wezla(int id, int poczatek, int koniec)
+static int znajdz_nr_wezla(const int id, const int poczatek, const int koniec)
 {
     if( poczatek > koniec )
         return -1;
@@ -186,7 +187,7 @@ static int znajdz_nr_wezla(int id, int poczatek, int koniec)
 
 /* Okresla kierunek na podstawie punktu poczatkowego
  * i punktu nastepnego */
-static int kierunek(int ap, int np)
+static int kierunek(const int ap, const int np)
 {
     int k = np - ap;
     if(METODA_STEROWANIA == 'P'){
@@ -222,7 +223,7 @@ static int kierunek(int ap, int np)
 }
 
 /* Decyduje o wywalaniu skretu w ktoras ze stron lub jezdzie na wprost*/
-static void kieruj(int pp, int ap, int np)
+static void kieruj(const int pp, const int ap, const int np)
 {
     int orientacja = kierunek(pp, ap);
     int nastepny_kierunek = kierunek(ap, np);
@@ -271,7 +272,7 @@ static void kieruj(int pp, int ap, int np)
 }
 
 /* Wyszukuje element o nakrotszej drodze do celu */
-static int minimum(int* d, int size, int* inS)
+static int minimum(const int* d, const int size, const int* inS)
 {
     int m = INF; 
     int m_index = INF;
@@ -290,7 +291,7 @@ static int minimum(int* d, int size, int* inS)
 /* TODO: dla trojkata nie wybiera najkrotszych sciezek.
  * To jest chyba problem z wagami ?
  * Algorytm dziala jakby z punktu widzenia siatki prostokatnej */
-static void dijkstra(int cel, int Q[][L_KOLUMN]){
+static void dijkstra(const int cel, const uint8_t Q[][L_KOLUMN]){
 #ifdef ARDUINO_DB
     Serial.print("Wywolanie: dijkstra(CEL, Q_?)\n");
 #endif
@@ -331,7 +332,7 @@ static void dijkstra(int cel, int Q[][L_KOLUMN]){
 }
 
 #ifdef PC_COMPILATION
-static void drukuj_wyniki(int* d, int* p){
+static void drukuj_wyniki(const int* d, const int* p){
     int x = 0;
     printf("Q:");
     for(x=0; x < LICZBA_WEZLOW; x++){
@@ -406,7 +407,7 @@ static void start(void){
 
 /* TODO UWAGA: ta funkcje trzeba przetestwac pod katem 
  * narzutu czasowego, moze powinna byc inline ? */
-static int odczytaj_karte(char probkuj)
+static int odczytaj_karte(const char probkuj)
 {
     volatile int data = 0;
     char done = CZYTAJ_DO_SKUTKU;
@@ -436,7 +437,7 @@ static int odczytaj_karte(char probkuj)
  * addr 11:     przechowuje liczbe celow
  * addr 12-20:  max dziewiec wezlow 'cel'
  */
-static void erase_eeprom(enum blok_t blok){
+static void erase_eeprom(const enum blok_t blok){
     int i;
 
     if(blok == PRZESZKODY){
@@ -451,7 +452,7 @@ static void erase_eeprom(enum blok_t blok){
 
 /* Ustawia INF w sasiadach danego wezla co jest 
  * jednoznaczne z ustawieniem go jako przeszkody */
-static void dodaj_przeszkode(int przeszkoda){
+static void dodaj_przeszkode(const int przeszkoda){
     int i;
     for(i=0; i < L_KOLUMN; i++){
         Q_P[przeszkoda][i] = INF;
@@ -459,19 +460,19 @@ static void dodaj_przeszkode(int przeszkoda){
     }
 }
 
-static void dodaj_cel(int cel, int nr){
+static void dodaj_cel(const int cel, const int nr){
    C[nr] = cel; 
 }
 
-inline static int liczba_celow(){
+inline static int liczba_celow(void){
     return EEPROM.read(11);
 }
 
 /* zaisuje tablice 'tab' w pamieci EEPROM w zaleznosci 
  * od bloku ktory jest celem */
-static void zapisz_w_eeprom(int tab[], enum blok_t blok){
+static void zapisz_w_eeprom(const int tab[], const enum blok_t blok){
     /* i- nr. bloku w EEPROM, k- licznik tablicy */
-    int i,k;
+    int k;
 
     /* przesuniecia w pamieci dla przeszkod i celow */
     const int shift_p = 2;
@@ -490,7 +491,7 @@ static void zapisz_w_eeprom(int tab[], enum blok_t blok){
     }
 }
 
-static void programuj_pamiec(enum blok_t blok, int pin_look){
+static void programuj_pamiec(const enum blok_t blok, const int pin_look){
     int wezel_do_zmiany = -1;           //zmienna pomocnicza, -1 gdyby nie przeczytano karty
     int tab_przeszkod_celow[9] =       //tab. przekazywana do zapisana w eeprom
         {-1,-1,-1,-1,-1,-1,-1,-1,-1}; 
@@ -513,7 +514,7 @@ static void programuj_pamiec(enum blok_t blok, int pin_look){
     zapisz_w_eeprom(tab_przeszkod_celow, blok);//zapisz w pamieci EEPROM
 }
 
-static void zaladuj_eeprom(){
+static void zaladuj_eeprom(void){
     int k = 0;                  //licznik petli
     int l_p = EEPROM.read(1);   //liczba przeszkod
     int l_c = EEPROM.read(11);  //liczba celow
@@ -529,8 +530,10 @@ static void zaladuj_eeprom(){
     }
 }
 
-int BUFF_W[5] = {INF,INF,INF,INF,INF};
-static void wyklucz_wezel(int w_s, int Q[][L_KOLUMN])
+int8_t BUFF_W[5] = {INF,INF,INF,INF,INF};
+/* Dziala jak dodaj_przeszkode tyle ze, mozna przywrocic usuniety wezel.
+ * Poprawia blad zawracania */
+static void wyklucz_wezel(const int w_s, uint8_t Q[][L_KOLUMN])
 {
     int x = 0;
 
@@ -543,7 +546,8 @@ static void wyklucz_wezel(int w_s, int Q[][L_KOLUMN])
     dodaj_przeszkode(w_s);
 }
 
-static void przywroc_wezel(int Q[][L_KOLUMN])
+/* Przywraca wezel po dzialaniu fun. wyklucz_wezel */
+static void przywroc_wezel(uint8_t Q[][L_KOLUMN])
 {
     int x = 0;
 
@@ -551,6 +555,14 @@ static void przywroc_wezel(int Q[][L_KOLUMN])
         Q[BUFF_W[4]][x] = BUFF_W[x];
         x++;
     }
+}
+
+/* W przypadku jakiegokolwiek bledu zatrzymuje pojazd 
+ * i pozostaje w petli */
+static void error(void)
+{
+    stop();
+    for(;;);
 }
 
 #define SILNIK_LEWY 2
@@ -643,9 +655,9 @@ void loop(){
    if( POZ.ap != CEL)
        start();
 
-   while(POZ.ap != CEL){            //TODO to powinna byc petla nieskonczona
+   while(1){            // POZ.ap != CEL
            /********************************************/
-           /*** Odczyt karty znajdujacej sie pod pojazdem
+           /*** Odczyt karty znajdujacej sie pod pojazdem*/
            /********************************************/   
        if(Serial.available() > 0){
            DATA = Serial.read();
