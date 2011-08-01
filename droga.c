@@ -51,12 +51,20 @@ uint8_t Q_P[][L_KOLUMN] =
 };
 
 /* Definicja sasiadow poszczegolnych wezlow dla siatki trojkatnej*/
-uint8_t Q_T[][L_KOLUMN] =
+/*uint8_t Q_T[][L_KOLUMN] =
 {
     {4,INF,INF,INF}, {4,5,INF,INF}, {5,6,INF,INF}, {6,7,INF,INF},
     {0,1,8,9}, {1,2,9,10}, {2,3,10,11}, {3,11,INF,INF},
-    {4,12,INF,INF}, {3,5,12,13}, {5,6,13,14}, {6,7,14,15},
+    {4,12,INF,INF}, {4,5,12,13}, {5,6,13,14}, {6,7,14,15},
     {8,9,INF,INF}, {9,10,INF,INF}, {10,11,INF,INF}, {11,INF,INF,INF}
+};
+*/
+uint8_t Q_T[][L_KOLUMN] =
+{
+    {4,1,INF,INF},{0,2,4,5},{1,3,5,6},{2,6,7,INF},
+    {0,1,5,8},{1,2,8,9},{2,3,9,10},{3,6,10,11},
+    {4,5,9,12},{5,6,12,13},{6,7,13,14},{7,10,14,15},
+    {8,9,13,INF},{9,10,12,14},{10,11,13,15},{14,11,INF,INF}
 };
 
 /* Przechowywanie aktualnego wektora ruch pojazdu */
@@ -111,6 +119,7 @@ static void programuj_pamiec(const enum blok_t, const int);
 static void zaladuj_eeprom(void);
 static void zrzut_eeprom(void);
 inline static int liczba_celow(void);
+inline static int liczba_przeszkod(void);
 
 static void dodaj_przeszkode(const int);
 static void dodaj_cel(const int, const int);
@@ -289,9 +298,10 @@ static int minimum(const int* d, const int size, const int* inS)
     return m_index;
 }
 
-/* TODO: dla trojkata nie wybiera najkrotszych sciezek.
- * To jest chyba problem z wagami ?
- * Algorytm dziala jakby z punktu widzenia siatki prostokatnej */
+/* 
+ * Buduje tablice poprzednikow (P[]) pod katem najkrotszej drogi 
+ * do wezla 'cel'. Dziala dla siatki prostokatnej i trojkatnej.
+ */
 static void dijkstra(const int cel, const uint8_t Q[][L_KOLUMN]){
 #ifdef ARDUINO_DB
     Serial.print("Wywolanie: dijkstra(CEL, Q_?)\n");
@@ -300,31 +310,30 @@ static void dijkstra(const int cel, const uint8_t Q[][L_KOLUMN]){
     int inS[LICZBA_WEZLOW] = {0}; //tablica informujaca o obecnosci w zbiorze Q
 
     int i,j = 0;
-    //na wszelki wypadek inicializujemy d niezdefiniowana odlegloscia (nie NULL!)
-    for(i=0; i < LICZBA_WEZLOW; i++){
+
+    for(i=0; i < LICZBA_WEZLOW; i++){                       //inicializujemy d maksymalna odlegloscia (nie NULL!)
         d[i] = NO_DEF;
     }
 
-    d[cel] = 0;     //droga do celu z niego samego jest rowna 0
-    P[cel] = cel;   //cel nie ma poprzednika
+    d[cel] = 0;                                             //droga do celu z niego samego jest rowna 0
+    P[cel] = cel;                                           //cel nie ma poprzednika
 
-    int h = 0;      //pomocnicza
-    int v;          //aktualnie badany wezel
-    for(i = 0; i < LICZBA_WEZLOW; i++){
-        v = minimum(d, LICZBA_WEZLOW, inS); //index najmniejszego wezla
-       /* przsuwamy wezel do zbioru S */
-        inS[v] = 1;
+    int h = 0;                                              //pomocnicza do obliczania dlugosci drogi do nastepnikow
+    int v;                                                  //aktualnie badany wezel
+    for(i = 0; i < LICZBA_WEZLOW; i++){                     //AKTUALNIE ROZPATRYWANY WEZEL
+        v = minimum(d, LICZBA_WEZLOW, inS);                 //index najmniejszego wezla
 
-        /* sasiedzi */
-        h = d[v] + 1;
-        if(h > d[v]){ //wazny warunek
-            for(j=0; j < MAX_SASIADOW_PROSTOKAT; j++){
-                if( (Q[v][j] != INF) && (inS[ Q[v][j] ] != 1) ){ 
-                    P[Q[v][j]] = v; //poprzenik
-                    d[Q[v][j]] = h; //waga + waga poprzednika
+        inS[v] = 1;                                         //przesuwamy wezel do zbioru S - przerobionych wezlow
+
+        h = d[v] + 1;                                       //dlugosc drogi do hipotetycznych nastepnikow aktualnego wezla
+        for(j=0; j < MAX_SASIADOW_PROSTOKAT; j++){          //OGLADAMY KAZDEGO SASIADA aktualnie rozpatrywanego wezla
+            if( (Q[v][j] != INF) && (inS[ Q[v][j] ] != 1) ){//Czy sasiad nie jest juz przerabianym wezlem 
+                if( h < d[ Q[v][j] ]){                      //Czy droga to tego sasiada jest dluzsza od jego aktualnej?
+                    P[Q[v][j]] = v;                         //Sasiad dostaje poprzednika w postaci aktualnie rozpatrywanego wezla v
+                    d[Q[v][j]] = h;                         //Nowa dlugosc drogi do wezla = droga poprzednika + 1
                 }
             }
-       }
+        }
 
     }
 #ifdef PC_COMPILATION
@@ -433,8 +442,7 @@ static void start(void){
     return;
 }
 
-/* TODO UWAGA: ta funkcje trzeba przetestwac pod katem 
- * narzutu czasowego, moze powinna byc inline ? */
+/* Odczytuje nr karty RFID przez interfejs szeregowy */
 static int odczytaj_karte(const char probkuj)
 {
     volatile int data = 0;
@@ -458,8 +466,9 @@ static int odczytaj_karte(const char probkuj)
     return -1;          //powrot w przypadku nie udanego PROBKUJ
 }
 
-
+/* Opoznienie zapisu do eeprom. Srednio zapis zajmuje 3.3 ms. */
 #define EEPROM_WRITE_DELAY 5
+
 /* Czysci pamiec eeprom. Bloki przeszkod lub celow.
  * addr 0:      NIE UZYWANY - zalecenie ATMELA
  * addr 1:      przechowuje liczbe przeszkod
@@ -498,6 +507,10 @@ static void dodaj_cel(const int cel, const int nr){
 
 inline static int liczba_celow(void){
     return EEPROM.read(11);
+}
+
+inline static int liczba_przeszkod(void){
+    return EEPROM.read(1);
 }
 
 /* zaisuje tablice 'tab' w pamieci EEPROM w zaleznosci 
@@ -551,9 +564,11 @@ static void zaladuj_eeprom(void){
 #ifdef ARDUINO_DB
     Serial.print("Wywolanie zaladuj_eeprom \n");
 #endif
-    int k = 0;                  //licznik petli
-    int l_p = EEPROM.read(1);   //liczba przeszkod
-    int l_c = EEPROM.read(11);  //liczba celow
+
+    int k = 0;
+    int l_p = liczba_przeszkod();
+    int l_c = liczba_celow();
+
 #ifdef ARDUINO_DB
     Serial.print("Wartosc kolejno l_p i l_c: ");
     Serial.print(l_p, DEC);
@@ -561,6 +576,7 @@ static void zaladuj_eeprom(void){
     Serial.print(l_c, DEC);
     Serial.print("\n");
 #endif
+
     const int shift_p = 2;      //przesuniecia indexu w pamieci dla przeszkod
     const int shift_c = 12;     //przesuniecie dla celow
 
@@ -605,6 +621,10 @@ static void przywroc_wezel(uint8_t Q[][L_KOLUMN])
 static void error(void)
 {
     stop();
+#ifdef ARDUINO_DB
+    Serial.print("Wystalpil jakis blad!\n");
+    Serial.print("Program w petli, zrestartuj procesor\n");
+#endif
     for(;;);
 }
 
@@ -617,7 +637,7 @@ static void sterowanie_bezsiatkowe()
 {
     while(1){
         POZ.ap = numer_wezla(odczytaj_karte(PROBKUJ));
-        if(POZ.ap < 4)      //jazda prosto
+        if(POZ.ap < 4 && POZ.ap > -1)      //jazda prosto
             start();
         else if(POZ.ap > 3 && POZ.ap < 8)
             skrecajPrawo();
@@ -652,12 +672,12 @@ void setup(){
     /* Po starcie pojazd nie porusza sie */
     stop();
 
-    /* Odczyt rodzaju siatki/sterowania, lub celu */
+    /* 
+     * Odczyt rodzaju siatki/sterowania. 
+     * Obsluga blednego ustawienia dipSwitcha.
+     */ 
     if( digitalRead(A2) && digitalRead(A3) ){
         METODA_STEROWANIA = 'N';
-        /* Dalej pojazd wchodzi w petle nieskonczona. Wyjsc z niej moze tylko
-         * po resecie sprzetowym. */
-        sterowanie_bezsiatkowe();
     }
     else if( digitalRead(A2) ){
         METODA_STEROWANIA = 'P';
@@ -669,23 +689,23 @@ void setup(){
         METODA_STEROWANIA = 'E';
     } 
 
+    /* 
+     * Sprawdzanie pinow programowania
+     */
     /* Programowanie przeszkod */
     if( digitalRead(A4) ){
-        erase_eeprom(PRZESZKODY);       //czyszczenie calego eeprom przeszkod
+        erase_eeprom(PRZESZKODY);   //czyszczenie calego eeprom przeszkod
         programuj_pamiec(PRZESZKODY, A4);
     }
     /* Programowanie celow */
     if( digitalRead(A5) ){
-        erase_eeprom(CELE);       //czyszczenie calego eeprom celow
+        erase_eeprom(CELE);         //czyszczenie calego eeprom celow
         programuj_pamiec(CELE, A5);
     }
 
-    /* Po programowaniu lub nie nalezy wczytac ustawienia z EEPROM */
-    zaladuj_eeprom();
 #ifdef ARDUINO_DB
-    zrzut_eeprom();
+    zrzut_eeprom();                 //Wydruk komorek pamieci EEPROM
 #endif
-    LICZBA_CELOW = liczba_celow();
 
 #ifdef ARDUINO_DB
     Serial.print("METODA_STEROWANIA=");
@@ -704,23 +724,41 @@ void setup(){
     POZ.ap = numer_wezla(odczytaj_karte(CZYTAJ_DO_SKUTKU));
     POZ.np = POZ_NIEZNANA;
 
-    /* Generowanie tablicy kolejnych wezlow prowadzacych do celu,
-     * lub w przypadku sterowania nadarznego: brak akcji */
+    /* 
+     * Generowanie tablicy kolejnych wezlow prowadzacych do celu,
+     * lub w przypadku sterowania nadarznego: skok do funkcji 
+     * obslugujacej to sterowanie. 
+     */
     if( METODA_STEROWANIA == 'P'){
+        /* Po programowaniu lub nie nalezy wczytac ustawienia z EEPROM */
+        zaladuj_eeprom();
+        LICZBA_CELOW = liczba_celow();
+        /* Usuwanie wezla startowego. Fix: blad proby zawracania */
         wyklucz_wezel(POZ.ap, Q_P);
+        /* Generowanie tablicy poprzednikow */
         dijkstra(C[0], Q_P);
+        /* Okreslanie pierwszego celu */
         CEL = C[0];
+        /* DALEJ NASTEPUJE SKOK DO FUNKCJI loop(); */
 #ifdef ARDUINO_DB
         Serial.print("Powrot z: dijkstra(CEL, Q_P)\n");
 #endif
     }
     else if( METODA_STEROWANIA == 'T'){
+        /* Wszystko tutaj dziala tak jak przy siatce prostokatnej */
+        zaladuj_eeprom();
+        LICZBA_CELOW = liczba_celow();
         wyklucz_wezel(POZ.ap, Q_T);
         dijkstra(C[0], Q_T);
         CEL = C[0];
 #ifdef ARDUINO_DB
         Serial.print("Powrot z: dijkstra(CEL, Q_T)\n");
 #endif
+    }
+    else if( METODA_STEROWANIA == 'N'){
+        /* Dalej pojazd wchodzi w petle nieskonczona. Wyjsc z niej moze tylko
+         * po resecie sprzetowym. */
+        sterowanie_bezsiatkowe();
     }
     else if( METODA_STEROWANIA == 'E'){
         error();
