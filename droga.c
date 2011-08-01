@@ -458,6 +458,8 @@ static int odczytaj_karte(const char probkuj)
     return -1;          //powrot w przypadku nie udanego PROBKUJ
 }
 
+
+#define EEPROM_WRITE_DELAY 5
 /* Czysci pamiec eeprom. Bloki przeszkod lub celow.
  * addr 0:      NIE UZYWANY - zalecenie ATMELA
  * addr 1:      przechowuje liczbe przeszkod
@@ -471,9 +473,11 @@ static void erase_eeprom(const enum blok_t blok){
     if(blok == PRZESZKODY){
         for(i=1; i <= 10; i++)
             EEPROM.write(i, NO_DEF);
+            delay(EEPROM_WRITE_DELAY);
     } else {                            //CELE
         for(i=11; i <=20; i++)
             EEPROM.write(i, NO_DEF);
+            delay(EEPROM_WRITE_DELAY);
     }
     return;
 }
@@ -498,7 +502,6 @@ inline static int liczba_celow(void){
 
 /* zaisuje tablice 'tab' w pamieci EEPROM w zaleznosci 
  * od bloku ktory jest celem */
-#define WRITE_TIME_EEPROM 5
 static void zapisz_w_eeprom(const int tab[], const enum blok_t blok){
     /* i- nr. bloku w EEPROM, k- licznik tablicy */
     int k;
@@ -510,13 +513,13 @@ static void zapisz_w_eeprom(const int tab[], const enum blok_t blok){
     if(blok == PRZESZKODY){
         for(k=0; tab[k] != -1; k++){
             EEPROM.write(shift_p + k, tab[k]);
-            delay(WRITE_TIME_EEPROM);
+            delay(EEPROM_WRITE_DELAY);
         }
         EEPROM.write(1, k);         // liczba wezlow 'przeszkoda'
     } else {                        //CELE
         for(k=0; tab[k] != -1; k++){
             EEPROM.write(shift_c + k, tab[k]);
-            delay(WRITE_TIME_EEPROM);
+            delay(EEPROM_WRITE_DELAY);
         }
         EEPROM.write(11, k);        // liczba wezlow 'cel'
     }
@@ -528,7 +531,6 @@ static void programuj_pamiec(const enum blok_t blok, const int pin_look){
         {-1,-1,-1,-1,-1,-1,-1,-1,-1}; 
     int k = 0;                          //licznik wprowadzonych wezlow do aktualizacji
 
-    erase_eeprom(blok);                 //czyszczenie calego eeprom przeszkod albo celow
     while(digitalRead(pin_look)){       //w petli programowania dopuki nie przelaczono dipSwitcha
         wezel_do_zmiany = numer_wezla(odczytaj_karte(PROBKUJ));
         if(wezel_do_zmiany == -1)    
@@ -606,6 +608,28 @@ static void error(void)
     for(;;);
 }
 
+/*
+ * Sterowanie dla pojazdu nie poruszajacego sie w zadnej
+ * siatce. Karty podzielono na grupy rozkazow. Po najechaniu
+ * na jedna z nich wykonywany jest odpoiwadajacy jej rozkaz.
+ */
+static void sterowanie_bezsiatkowe()
+{
+    while(1){
+        POZ.ap = numer_wezla(odczytaj_karte(PROBKUJ));
+        if(POZ.ap < 4)      //jazda prosto
+            start();
+        else if(POZ.ap > 3 && POZ.ap < 8)
+            skrecajPrawo();
+        else if(POZ.ap > 7 && POZ.ap < 12)
+            skrecajLewo();
+        else if(POZ.ap > 11)
+            stop();
+        else
+            continue;
+    }
+}
+
 #define SILNIK_LEWY 2
 #define SILNIK_PRAWY 3
 #define SILNIKI_AKTYWNE 4
@@ -629,22 +653,30 @@ void setup(){
     stop();
 
     /* Odczyt rodzaju siatki/sterowania, lub celu */
-    if( digitalRead(A2) ){
+    if( digitalRead(A2) && digitalRead(A3) ){
+        METODA_STEROWANIA = 'N';
+        /* Dalej pojazd wchodzi w petle nieskonczona. Wyjsc z niej moze tylko
+         * po resecie sprzetowym. */
+        sterowanie_bezsiatkowe();
+    }
+    else if( digitalRead(A2) ){
         METODA_STEROWANIA = 'P';
     }
     else if( digitalRead(A3) ){
         METODA_STEROWANIA = 'T';
-    } 
-    else if( digitalRead(A2) && digitalRead(A3) ){
-        METODA_STEROWANIA = 'N';
     }
+    else{
+        METODA_STEROWANIA = 'E';
+    } 
 
     /* Programowanie przeszkod */
     if( digitalRead(A4) ){
+        erase_eeprom(PRZESZKODY);       //czyszczenie calego eeprom przeszkod
         programuj_pamiec(PRZESZKODY, A4);
     }
     /* Programowanie celow */
     if( digitalRead(A5) ){
+        erase_eeprom(CELE);       //czyszczenie calego eeprom celow
         programuj_pamiec(CELE, A5);
     }
 
@@ -689,6 +721,9 @@ void setup(){
 #ifdef ARDUINO_DB
         Serial.print("Powrot z: dijkstra(CEL, Q_T)\n");
 #endif
+    }
+    else if( METODA_STEROWANIA == 'E'){
+        error();
     }
 
 }
