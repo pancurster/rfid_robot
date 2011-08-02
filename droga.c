@@ -51,14 +51,15 @@ uint8_t Q_P[][L_KOLUMN] =
 };
 
 /* Definicja sasiadow poszczegolnych wezlow dla siatki trojkatnej*/
-/*uint8_t Q_T[][L_KOLUMN] =
+uint8_t Q_T[][L_KOLUMN] =
 {
     {4,INF,INF,INF}, {4,5,INF,INF}, {5,6,INF,INF}, {6,7,INF,INF},
     {0,1,8,9}, {1,2,9,10}, {2,3,10,11}, {3,11,INF,INF},
     {4,12,INF,INF}, {4,5,12,13}, {5,6,13,14}, {6,7,14,15},
     {8,9,INF,INF}, {9,10,INF,INF}, {10,11,INF,INF}, {11,INF,INF,INF}
 };
-*/
+/* TODO: Jesli chcesz uzyc tej siatki to trzeba dodac obsluge skretow o 
+ * 120 i 60 stopni. Do edycji funkcja kieruj();
 uint8_t Q_T[][L_KOLUMN] =
 {
     {4,1,INF,INF},{0,2,4,5},{1,3,5,6},{2,6,7,INF},
@@ -66,7 +67,7 @@ uint8_t Q_T[][L_KOLUMN] =
     {4,5,9,12},{5,6,12,13},{6,7,13,14},{7,10,14,15},
     {8,9,13,INF},{9,10,12,14},{10,11,13,15},{14,11,INF,INF}
 };
-
+*/
 /* Przechowywanie aktualnego wektora ruch pojazdu */
 struct wektor_ruchu{
     int pp;
@@ -74,6 +75,9 @@ struct wektor_ruchu{
     int np;
 }POZ;
 
+/* Parametr funkcji zapisujacych do EEPROMu.
+ * PRZESZKODY- zapisywanie w bloku o adr. 1-10
+ * CELE - zapisywanie w bloku o adr. 11-20 */
 enum blok_t{
     PRZESZKODY = 1,
     CELE = 2
@@ -217,13 +221,13 @@ static int kierunek(const int ap, const int np)
         }
     }else if(METODA_STEROWANIA == 'T'){
         switch(k){
-            case (-L_KOLUMN):
+            case (-L_KOLUMN+1):
                 return NE;
             case (L_KOLUMN):
                 return SE;
             case (L_KOLUMN-1):
                 return SW;
-            case (-L_KOLUMN-1):
+            case (-L_KOLUMN):
                 return NW;
             default:
                 return -1;
