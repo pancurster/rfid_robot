@@ -6,6 +6,7 @@
 
 #define PC_COMPILATION
 #define ARDUINO_DB
+//#define ROZSZERZONA_SIATKA_T
 
 #ifdef PC_COMPILATION
 #include <stdio.h>
@@ -50,6 +51,19 @@ uint8_t Q_P[][L_KOLUMN] =
     {8,13,INF,INF}, {9,14,12,INF}, {10,15,13,INF}, {11,14,INF,INF}
 };
 
+#ifdef ROZSZERZONA_SIATKA_T
+/* Rozszerzona siatka trojkatna. W tej siatce punkty na brzegach posiadaja
+ * wiecej sasiadow niez w siatce podstatwowej. Niestety zeby wszystko dobrze
+ * dzialalo trzeba bylo dodac obsluge skretow o 60 i 120 stopni */
+uint8_t Q_T[][L_KOLUMN] =
+{
+    {4,1,INF,INF},{0,2,4,5},{1,3,5,6},{2,6,7,INF},
+    {0,1,5,8},{1,2,8,9},{2,3,9,10},{3,6,10,11},
+    {4,5,9,12},{5,6,12,13},{6,7,13,14},{7,10,14,15},
+    {8,9,13,INF},{9,10,12,14},{10,11,13,15},{14,11,INF,INF}
+};
+
+#else
 /* Definicja sasiadow poszczegolnych wezlow dla siatki trojkatnej*/
 uint8_t Q_T[][L_KOLUMN] =
 {
@@ -58,16 +72,9 @@ uint8_t Q_T[][L_KOLUMN] =
     {4,12,INF,INF}, {4,5,12,13}, {5,6,13,14}, {6,7,14,15},
     {8,9,INF,INF}, {9,10,INF,INF}, {10,11,INF,INF}, {11,INF,INF,INF}
 };
-/* TODO: Jesli chcesz uzyc tej siatki to trzeba dodac obsluge skretow o 
- * 120 i 60 stopni. Do edycji funkcja kieruj();
-uint8_t Q_T[][L_KOLUMN] =
-{
-    {4,1,INF,INF},{0,2,4,5},{1,3,5,6},{2,6,7,INF},
-    {0,1,5,8},{1,2,8,9},{2,3,9,10},{3,6,10,11},
-    {4,5,9,12},{5,6,12,13},{6,7,13,14},{7,10,14,15},
-    {8,9,13,INF},{9,10,12,14},{10,11,13,15},{14,11,INF,INF}
-};
-*/
+
+#endif //ROZSZERZONA_SIATKA_T
+
 /* Przechowywanie aktualnego wektora ruch pojazdu */
 struct wektor_ruchu{
     int pp;
@@ -88,8 +95,12 @@ enum blok_t{
 #define CZYTAJ_DO_SKUTKU 0
 #define PROBKUJ 1
 
-/* SILNIKI */
-#define CZAS_SKRETU_90_STOPNI 2000
+/* Opoznienia potrzebne do skretu o 60,90,120 stopni */
+enum cz_skretu{
+    S_60 = 1000,
+    S_90 = 2000,
+    S_120= 3000
+};
 
 /* STAN POJAZDU */
 volatile int CEL = 0;                    //nr wezla do ktorego pojazd jedzie
@@ -130,8 +141,8 @@ static void dodaj_cel(const int, const int);
 static int odczytaj_karte(const char);
 static void stop(void);
 static void start(void);
-static void skrecajLewo(void);
-static void skrecajPrawo(void);
+static void skrecajLewo(enum cz_skretu);
+static void skrecajPrawo(enum cz_skretu);
 static void error(void);
 void setup();
 void loop();
@@ -252,6 +263,7 @@ static void kieruj(const int pp, const int ap, const int np)
         return;
     }
 
+    /* Dopasowuje wszystko co implikuje skret w lewo o 90 stopnik */
     else if(  ((orientacja == N) && (nastepny_kierunek == W)) 
             ||((orientacja == E) && (nastepny_kierunek == N))
             ||((orientacja == S) && (nastepny_kierunek == E))
@@ -264,9 +276,10 @@ static void kieruj(const int pp, const int ap, const int np)
 #ifdef ARDUINO_DB
         Serial.print("kieruj:skrecam w lewo\n");
 #endif
-        skrecajLewo();
+        skrecajLewo(S_90);
     }
 
+    /* Dopasowuje wszystko co implikuje skret w prawo o 90 stopni */
     else if(  ((orientacja == N) && (nastepny_kierunek == E))
             ||((orientacja == E) && (nastepny_kierunek == S))
             ||((orientacja == S) && (nastepny_kierunek == W))
@@ -279,8 +292,33 @@ static void kieruj(const int pp, const int ap, const int np)
 #ifdef ARDUINO_DB
             Serial.print("kieruj:skrecam w prawo\n");
 #endif
-            skrecajPrawo();
+            skrecajPrawo(S_90);
     }
+
+#ifdef ROZSZERZONA_SIATKA_T
+    /* Obsluga rozszerzonej siatki trojkatnej. Skrety o 60 i 120 stopni */
+    else if(  ((orientacja == NE) && (nastepny_kierunek == E))
+            ||((orientacja == SW) && (nastepny_kierunek == W))
+            ||((orientacja == W ) && (nastepny_kierunek ==NW))
+            ||((orientacja == E ) && (nastepny_kierunek ==SE)) ) 
+                        { skrecajPrawo(S_60); }
+    else if(  ((orientacja == NW) && (nastepny_kierunek == E))
+            ||((orientacja == SE) && (nastepny_kierunek == W))
+            ||((orientacja == W ) && (nastepny_kierunek ==NE))
+            ||((orientacja == E ) && (nastepny_kierunek ==SW)) )
+                        { skrecajPrawo(S_120);}
+    else if(  ((orientacja == NW) && (nastepny_kierunek == W))
+            ||((orientacja == SE) && (nastepny_kierunek == E))
+            ||((orientacja == W ) && (nastepny_kierunek ==SW))
+            ||((orientacja == E ) && (nastepny_kierunek ==NE)) )
+                        { skrecajLewo(S_60); }
+    else if(  ((orientacja == NE) && (nastepny_kierunek == W)) 
+            ||((orientacja == SW) && (nastepny_kierunek == E))
+            ||((orientacja == W ) && (nastepny_kierunek ==SE))
+            ||((orientacja == E ) && (nastepny_kierunek ==NW)) )
+                        { skrecajLewo(S_120); }
+
+#endif
 
     return;
 }
@@ -405,24 +443,24 @@ static void zrzut_eeprom(void)
 #endif
 
 /* Obsluga sretu w lewo */
-static void skrecajLewo(void){
+static void skrecajLewo(enum cz_skretu czas_skretu_o_X_stopni){
 #ifdef ARDUINO_DB
     Serial.print("Wywolanie: skrecajLewo()\n");
 #endif
     PORTD &= ~(1<<2);
-    delay(CZAS_SKRETU_90_STOPNI);
+    delay(czas_skretu_o_X_stopni);
     PORTD |= (1<<2);
 
     return;
 }
 
 /* Obsluga skretu w prawo */
-static void skrecajPrawo(void){
+static void skrecajPrawo(enum cz_skretu czas_skretu_o_X_stopni){
 #ifdef ARDUINO_DB
     Serial.print("Wywolanie: skrecajPrawo()\n");
 #endif
     PORTD &= ~(1<<3);
-    delay(CZAS_SKRETU_90_STOPNI);
+    delay(czas_skretu_o_X_stopni);
     PORTD |= (1<<3);
 
     return;
@@ -644,9 +682,9 @@ static void sterowanie_bezsiatkowe()
         if(POZ.ap < 4 && POZ.ap > -1)      //jazda prosto
             start();
         else if(POZ.ap > 3 && POZ.ap < 8)
-            skrecajPrawo();
+            skrecajPrawo(S_90);
         else if(POZ.ap > 7 && POZ.ap < 12)
-            skrecajLewo();
+            skrecajLewo(S_90);
         else if(POZ.ap > 11)
             stop();
         else
