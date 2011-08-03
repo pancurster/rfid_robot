@@ -128,7 +128,6 @@ static int numer_wezla(const int);
 static void wyklucz_wezel(const int w_s, uint8_t Q[][L_KOLUMN]);
 static void przywroc_wezel(uint8_t Q[][L_KOLUMN]);
 
-static void erase_eeprom(const enum blok_t );
 static void zapisz_w_eeprom(const int* tab, const enum blok_t);
 static void programuj_pamiec(const enum blok_t, const int);
 static void zaladuj_eeprom(void);
@@ -508,31 +507,6 @@ static int odczytaj_karte(const char probkuj)
     return -1;          //powrot w przypadku nie udanego PROBKUJ
 }
 
-/* Opoznienie zapisu do eeprom. Srednio zapis zajmuje 3.3 ms. */
-#define EEPROM_WRITE_DELAY 5
-
-/* Czysci pamiec eeprom. Bloki przeszkod lub celow.
- * addr 0:      NIE UZYWANY - zalecenie ATMELA
- * addr 1:      przechowuje liczbe przeszkod
- * addr 2-10:   max dziewiec wezlow 'przeszkod'
- * addr 11:     przechowuje liczbe celow
- * addr 12-20:  max dziewiec wezlow 'cel'
- */
-static void erase_eeprom(const enum blok_t blok){
-    int i;
-
-    if(blok == PRZESZKODY){
-        for(i=1; i <= 10; i++)
-            EEPROM.write(i, NO_DEF);
-            delay(EEPROM_WRITE_DELAY);
-    } else {                            //CELE
-        for(i=11; i <=20; i++)
-            EEPROM.write(i, NO_DEF);
-            delay(EEPROM_WRITE_DELAY);
-    }
-    return;
-}
-
 /* Ustawia INF w sasiadach danego wezla co jest 
  * jednoznaczne z ustawieniem go jako przeszkody */
 static void dodaj_przeszkode(const int przeszkoda){
@@ -554,6 +528,15 @@ inline static int liczba_celow(void){
 inline static int liczba_przeszkod(void){
     return EEPROM.read(1);
 }
+
+/* 
+ * Oraganizacja pamieci EEPROM:
+ * addr 0:      NIE UZYWANY - zalecenie ATMELA
+ * addr 1:      przechowuje liczbe przeszkod
+ * addr 2-10:   max dziewiec wezlow 'przeszkod'
+ * addr 11:     przechowuje liczbe celow
+ * addr 12-20:  max dziewiec wezlow 'cel'
+ */
 
 /* zaisuje tablice 'tab' w pamieci EEPROM w zaleznosci 
  * od bloku ktory jest celem */
@@ -736,12 +719,10 @@ void setup(){
      */
     /* Programowanie przeszkod */
     if( digitalRead(A4) ){
-        erase_eeprom(PRZESZKODY);   //czyszczenie calego eeprom przeszkod
         programuj_pamiec(PRZESZKODY, A4);
     }
     /* Programowanie celow */
     if( digitalRead(A5) ){
-        erase_eeprom(CELE);         //czyszczenie calego eeprom celow
         programuj_pamiec(CELE, A5);
     }
 
@@ -816,7 +797,7 @@ void loop(){
    if( POZ.ap != CEL)
        start();
 
-   while(1){            // POZ.ap != CEL
+   while(1){
            /********************************************/
            /*** Odczyt karty znajdujacej sie pod pojazdem*/
            /********************************************/   
