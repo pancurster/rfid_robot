@@ -6,7 +6,7 @@
 
 #define PC_COMPILATION
 #define ARDUINO_DB
-//#define ROZSZERZONA_SIATKA_T
+#define ROZSZERZONA_SIATKA_T
 
 #ifdef PC_COMPILATION
 #include <stdio.h>
@@ -231,6 +231,10 @@ static int kierunek(const int ap, const int np)
         }
     }else if(METODA_STEROWANIA == 'T'){
         switch(k){
+            case (-1):
+                return W;
+            case (1):
+                return E;
             case (-L_KOLUMN+1):
                 return NE;
             case (L_KOLUMN):
@@ -537,7 +541,7 @@ inline static int liczba_przeszkod(void){
  * addr 11:     przechowuje liczbe celow
  * addr 12-20:  max dziewiec wezlow 'cel'
  */
-
+#define EEPROM_WRITE_DELAY 5
 /* zaisuje tablice 'tab' w pamieci EEPROM w zaleznosci 
  * od bloku ktory jest celem */
 static void zapisz_w_eeprom(const int tab[], const enum blok_t blok){
@@ -841,8 +845,10 @@ void loop(){
            /*********************************************/
            if(POZ.ap == CEL){
                k++;                     //Kolejny cel osiagniety
-               if(k >= LICZBA_CELOW)    //Wszystkie cele osiagniete ?
+               if(k >= LICZBA_CELOW){    //Wszystkie cele osiagniete ?
                    stop();
+                   k--;
+               }
                else{
                    CEL = C[k];
                    if(METODA_STEROWANIA == 'P'){
