@@ -277,7 +277,7 @@ static void kieruj(const int pp, const int ap, const int np)
             ||((orientacja ==NW) && (nastepny_kierunek ==SW)) )
     {
 #ifdef ARDUINO_DB
-        Serial.print("kieruj:skrecam w lewo\n");
+        Serial.print("kieruj:skrecam w lewo o 90 st\n");
 #endif
         skrecajLewo(S_90);
     }
@@ -293,7 +293,7 @@ static void kieruj(const int pp, const int ap, const int np)
             ||((orientacja ==NW) && (nastepny_kierunek ==NE)) )
     {
 #ifdef ARDUINO_DB
-            Serial.print("kieruj:skrecam w prawo\n");
+            Serial.print("kieruj:skrecam w prawo o 90 st\n");
 #endif
             skrecajPrawo(S_90);
     }
@@ -304,22 +304,38 @@ static void kieruj(const int pp, const int ap, const int np)
             ||((orientacja == SW) && (nastepny_kierunek == W))
             ||((orientacja == W ) && (nastepny_kierunek ==NW))
             ||((orientacja == E ) && (nastepny_kierunek ==SE)) ) 
-                        { skrecajPrawo(S_60); }
+                        { skrecajPrawo(S_60);
+#ifdef ARDUINO_DB
+                       Serial.print("kieruj:skrecam w prawo o 60 st\n"); 
+#endif
+                        }
     else if(  ((orientacja == NW) && (nastepny_kierunek == E))
             ||((orientacja == SE) && (nastepny_kierunek == W))
             ||((orientacja == W ) && (nastepny_kierunek ==NE))
             ||((orientacja == E ) && (nastepny_kierunek ==SW)) )
-                        { skrecajPrawo(S_120);}
+                        { skrecajPrawo(S_120);
+#ifdef ARDUINO_DB
+                        Serial.print("kieruj:skrecam w prawo o 120 st\n");
+#endif
+                        }
     else if(  ((orientacja == NW) && (nastepny_kierunek == W))
             ||((orientacja == SE) && (nastepny_kierunek == E))
             ||((orientacja == W ) && (nastepny_kierunek ==SW))
             ||((orientacja == E ) && (nastepny_kierunek ==NE)) )
-                        { skrecajLewo(S_60); }
+                        { skrecajLewo(S_60); 
+#ifdef ARDUINO_DB
+                        Serial.print("kieruj:skrecam w lewo o 60 st\n");
+#endif
+                        }
     else if(  ((orientacja == NE) && (nastepny_kierunek == W)) 
             ||((orientacja == SW) && (nastepny_kierunek == E))
             ||((orientacja == W ) && (nastepny_kierunek ==SE))
             ||((orientacja == E ) && (nastepny_kierunek ==NW)) )
-                        { skrecajLewo(S_120); }
+                        { skrecajLewo(S_120); 
+#ifdef ARDUINO_DB
+                        Serial.print("kieruj:skrecam w lewo o 120 st\n");
+#endif
+                        }
 
 #endif
 
