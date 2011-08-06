@@ -11,6 +11,7 @@
 #ifdef PC_COMPILATION
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 #include "test.h"
 #endif
 
@@ -97,9 +98,9 @@ enum blok_t{
 
 /* Opoznienia potrzebne do skretu o 60,90,120 stopni */
 enum cz_skretu{
-    S_60 = 1000,
-    S_90 = 2000,
-    S_120= 3000
+    S_60 = 1466,
+    S_90 = 2200,
+    S_120= 2933
 };
 
 /* STAN POJAZDU */
@@ -739,10 +740,16 @@ void setup(){
      */
     /* Programowanie przeszkod */
     if( digitalRead(A4) ){
+#ifdef ARDUINO_DB
+        Serial.print("Programowenie przeszkod\n");
+#endif
         programuj_pamiec(PRZESZKODY, A4);
     }
     /* Programowanie celow */
     if( digitalRead(A5) ){
+#ifdef ARDUINO_DB
+        Serial.print("Programowanie celow\n");
+#endif
         programuj_pamiec(CELE, A5);
     }
 
