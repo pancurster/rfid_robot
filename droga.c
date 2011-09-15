@@ -122,7 +122,7 @@ const int ID_KART[LICZBA_WEZLOW] =
 static void dijkstra(const int, const uint8_t Q[][L_KOLUMN]);
 static void drukuj_wyniki(const int*, const int*);
 static int minimum(const int*, const int, const int*);
-static int kierunek(const int, const int);
+static int wektor(const int, const int);
 static void kieruj(const int, const int, const int);
 static int znajdz_nr_wezla(const int, const int, const int);
 static int numer_wezla(const int);
@@ -210,9 +210,9 @@ static int znajdz_nr_wezla(const int id, const int poczatek, const int koniec)
 #define SE 5
 #define SW 7
 
-/* Okresla kierunek na podstawie punktu poczatkowego
+/* Okresla wektor na podstawie punktu poczatkowego
  * i punktu nastepnego */
-static int kierunek(const int ap, const int np)
+static int wektor(const int ap, const int np)
 {
     int k = np - ap;
     if(METODA_STEROWANIA == 'P'){
@@ -254,8 +254,8 @@ static int kierunek(const int ap, const int np)
 /* Decyduje o wywalaniu skretu w ktoras ze stron lub jezdzie na wprost*/
 static void kieruj(const int pp, const int ap, const int np)
 {
-    int orientacja = kierunek(pp, ap);
-    int nastepny_kierunek = kierunek(ap, np);
+    int orientacja = wektor(pp, ap);
+    int nastepny_kierunek = wektor(ap, np);
 
     if( orientacja == nastepny_kierunek
           || orientacja == -1
@@ -528,7 +528,7 @@ static int odczytaj_karte(const char probkuj)
     return -1;          //powrot w przypadku nie udanego PROBKUJ
 }
 
-/* Ustawia INF w sasiadach danego wezla co jest 
+/* Ustawia INF w liscie jego sasiadow co jest
  * jednoznaczne z ustawieniem go jako przeszkody */
 static void dodaj_przeszkode(const int przeszkoda){
     int i;
@@ -683,14 +683,22 @@ static void sterowanie_bezsiatkowe()
 {
     while(1){
         POZ.ap = numer_wezla(odczytaj_karte(PROBKUJ));
-        if(POZ.ap < 4 && POZ.ap > -1)      //jazda prosto
+        if(POZ.ap < 4 && POZ.ap > -1){      //jazda prosto
             start();
-        else if(POZ.ap > 3 && POZ.ap < 8)
+            delay(500);
+        }
+        else if(POZ.ap > 3 && POZ.ap < 8){
             skrecajPrawo(S_90);
-        else if(POZ.ap > 7 && POZ.ap < 12)
+            delay(500);
+        }
+        else if(POZ.ap > 7 && POZ.ap < 12){
             skrecajLewo(S_90);
-        else if(POZ.ap > 11)
+            delay(500);
+        }
+        else if(POZ.ap > 11){
             stop();
+            delay(500);
+        }
         else
             continue;
     }
