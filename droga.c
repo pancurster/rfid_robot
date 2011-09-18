@@ -98,9 +98,9 @@ enum blok_t{
 
 /* Opoznienia potrzebne do skretu o 60,90,120 stopni */
 enum cz_skretu{
-    S_60 = 1466,
-    S_90 = 2200,
-    S_120= 2933
+    S_60 = 1533,
+    S_90 = 2300,
+    S_120= 3066
 };
 
 /* STAN POJAZDU */
