@@ -31,8 +31,17 @@ Requirement and objectives of project
       technology
     - Good fun when writing a thesis :)
 
-Details of vehicle functions
-----------------------------
+Details of vehicle construction and functions
+---------------------------------------------
+
+###Conception
+
+Built vahicle moves in a special environment. Area of work is filled with RFID
+tags. The idea is based on hiding RFID tags under the usable surface that
+people have not see any alement of control system.
+
+![Example work area](http://dl.dropbox.com/u/18809604/Zdejcie_praca_mgr/pod%C5%82o%C5%BCe_magazynu.png)
+
 
 1. Info
 Program rfid_robot jest programem kontrolujacym
