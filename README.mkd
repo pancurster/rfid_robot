@@ -38,10 +38,28 @@ Details of vehicle construction and functions
 
 Built vahicle moves in a special environment. Area of work is filled with RFID
 tags. The idea is based on hiding RFID tags under the usable surface that
-people have not see any alement of control system.
+people have not see any element of control system.
 
 ![Example work area](http://dl.dropbox.com/u/18809604/Zdejcie_praca_mgr/pod%C5%82o%C5%BCe_magazynu.png)
 
+The Robot is designed to independently reach the target. To do this vehicle
+has stored in the memory map of tags. The Tags Map describe each node. Each
+node has such attributes as:
+* Available - not available
+* Available directions of motion from node
+* List of the nearest adjacent nodes
+Based on the map, robot is able to calculate the route to its destination.
+Based on the achieved nodes, vehicle can determine its location and select
+next motion vector. During the successive achievement of grid nodes robot
+checks whether the actual node is the goal - if it so - robot announces reach
+the target and stop.
+
+There are two main configurations of grids of tags and control with a constant
+track. Each grid configuration has its own rules of movement restrictions.
+
+![Example grid configuration](http://dl.dropbox.com/u/18809604/Zdejcie_praca_mgr/SiatkiRozKoncepcja.png)
+
+###Construction of work area
 
 1. Info
 Program rfid_robot jest programem kontrolujacym
