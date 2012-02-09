@@ -106,7 +106,8 @@ Chassis: IC1 - Atmega 328P; U1 - motor controler; U2 - RFID module;
 S1 - control panel; ANT1 - RFID module antenna; BAT - battery; M1,2 - motors;
 K1,2 - front, driven wheels; K3 - rear, independent wheel;
 
-You can find schema of vehicle: [schema](http://dl.dropbox.com/u/18809604/Zdejcie_praca_mgr/RFID_robot_schema.png "here")
-My thesis is: [thesis](http://dl.dropbox.com/u/18809604/Praca%20magisterska.pdf "here")
+You can find schema of vehicle: [here](http://dl.dropbox.com/u/18809604/Zdejcie_praca_mgr/RFID_robot_schema.png "here")
+, and thesis is: [here](http://dl.dropbox.com/u/18809604/Praca%20magisterska.pdf "here")
+
 Some short vid of the unfinished work yet: [video](http://youtu.be/CioBS_WVCUw "vid 1") [video2](http://youtu.be/tvFMYQMHEGQ "vid 2")
 
