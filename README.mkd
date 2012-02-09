@@ -45,9 +45,11 @@ people have not see any element of control system.
 The Robot is designed to independently reach the target. To do this vehicle
 has stored in the memory map of tags. The Tags Map describe each node. Each
 node has such attributes as:
+
     * Available - not available
     * Available directions of motion from node
     * List of the nearest adjacent nodes
+
 Based on the map, robot is able to calculate the route to its destination.
 Based on the achieved nodes, vehicle can determine its location and select
 next motion vector. During the successive achievement of grid nodes robot
@@ -64,6 +66,7 @@ track. Each grid configuration has its own rules of movement restrictions.
     movement rules.
     The third diagram shows strategy of constant track movement. Tags have been
     classified into four groups - they correspond to commands:
+
     * F - forward
     * TR - turn right
     * TL - turn left
@@ -82,6 +85,7 @@ pictrue below:
 ![The look of Robot](http://dl.dropbox.com/u/18809604/Zdejcie_praca_mgr/robot_pic.png)
 
 The main parts used to build vehicle showed on pictrue above are:
+
     * microcontroler AVR Atmega 328P
     * PCB which is also the chassis
     * RFID MP01612 module with its antenna
@@ -90,8 +94,10 @@ The main parts used to build vehicle showed on pictrue above are:
     * Control panel
 
 ![Block diagram](http://dl.dropbox.com/u/18809604/Zdejcie_praca_mgr/schemat_blokowy.png)
+
 Block diagram of vehicle
 
 ![Chassis](http://dl.dropbox.com/u/18809604/Zdejcie_praca_mgr/chassis.png)
+
 Chassis
 
