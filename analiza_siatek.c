@@ -25,6 +25,8 @@ static void dodaj_przeszkode(int** q, const int przeszkoda);
 
 int main(int argc, char** argv)
 {
+    printf("Ten program zle dziala!\n Nie poprawne dlugosci drog!\n");
+    //exit(1);
     /* Liczba wezlow podawana z lini polecen */
     LICZBA_WEZLOW = atoi(argv[1]);
 
